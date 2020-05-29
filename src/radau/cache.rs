@@ -9,6 +9,9 @@ pub struct Radau5Cache {
     pub caljac: bool,
     pub calhes: bool,
 
+    pub first: bool,
+    pub reject: bool,
+
     pub mljac: usize,
     pub mujac: usize,
     pub mlmas: usize,
@@ -28,14 +31,16 @@ pub struct Radau5Cache {
     pub ldjac: usize,
     pub lde1: usize,
 
+    pub fac1: f64,
+    pub alphn: f64,
+    pub betan: f64,
+    pub err: f64,
+
     pub u0: Array1<f64>,
 
     pub scal: Array1<f64>,
     /// Coninuous output vectors
-    pub cont1: Array1<f64>,
-    pub cont2: Array1<f64>,
-    pub cont3: Array1<f64>,
-    pub cont4: Array1<f64>,
+    pub cont: Array1<f64>,
 
     pub z1: Array1<f64>,
     pub z2: Array1<f64>,
