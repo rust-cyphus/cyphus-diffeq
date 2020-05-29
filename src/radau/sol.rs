@@ -1,348 +1,351 @@
 use super::cache::Radau5Cache;
 use crate::linalg::sol::*;
+use crate::radau::alg::Radau5;
 use ndarray::prelude::*;
 
-/// Solve the linear systems for the Radau5 algorithm
-pub(crate) fn linear_solve(cache: &mut Radau5Cache, alphn: f64, betan: f64, fac1: f64) {
-    let n = cache.e1.nrows();
-    let nm1 = n - cache.m1;
+impl Radau5Cache {
+    /// Solve the linear systems for the Radau5 algorithm
+    pub(crate) fn linear_solve(&mut self) {
+        let n = self.e1.nrows();
+        let nm1 = n - self.m1;
 
-    match cache.prob_type {
-        1 => {
-            // mass = identity, Jacobian a full matrix
-            for i in 0..n {
-                let s2 = -cache.f2[i];
-                let s3 = -cache.f3[i];
-                cache.z1[i] -= cache.f1[i] * fac1;
-                cache.z2[i] = cache.z2[i] + s2 * alphn - s3 * betan;
-                cache.z3[i] = cache.z3[i] + s3 * alphn + s2 * betan;
-            }
-            sol(n, cache.e1.view(), cache.z1.view_mut(), cache.ip1.view());
-            solc(
-                n,
-                cache.e2r.view(),
-                cache.e2i.view(),
-                cache.z2.view_mut(),
-                cache.z3.view_mut(),
-                cache.ip2.view(),
-            );
-        }
-        2 => {
-            // mass = identity, Jacobian a banded matrix
-            for i in 0..n {
-                let s2 = -cache.f2[i];
-                let s3 = -cache.f3[i];
-                cache.z1[i] -= cache.f1[i] * fac1;
-                cache.z2[i] = cache.z2[i] + s2 * alphn - s3 * betan;
-                cache.z3[i] = cache.z3[i] + s3 * alphn + s2 * betan;
-            }
-            solb(
-                n,
-                cache.e1.view(),
-                cache.mle,
-                cache.mue,
-                cache.z1.view_mut(),
-                cache.ip1.view(),
-            );
-            solbc(
-                n,
-                cache.e2r.view(),
-                cache.e2i.view(),
-                cache.mle,
-                cache.mue,
-                cache.z2.view_mut(),
-                cache.z3.view_mut(),
-                cache.ip2.view(),
-            );
-        }
-        3 => {
-            // mass is a banded matrix, Jacobian a full matrix
-            for i in 0..n {
-                let mut s1 = 0.0;
-                let mut s2 = 0.0;
-                let mut s3 = 0.0;
-                for j in 0.max(i - cache.mlmas)..n.min(i + cache.mumas + 1) {
-                    let bb = cache.mass_matrix[[i - j + cache.mbdiag - 1, j]];
-                    s1 -= bb * cache.f1[j];
-                    s2 -= bb * cache.f2[j];
-                    s3 -= bb * cache.f3[j];
+        match self.prob_type {
+            1 => {
+                // mass = identity, Jacobian a full matrix
+                for i in 0..n {
+                    let s2 = -self.f2[i];
+                    let s3 = -self.f3[i];
+                    self.z1[i] -= self.f1[i] * self.fac1;
+                    self.z2[i] = self.z2[i] + s2 * self.alphn - s3 * self.betan;
+                    self.z3[i] = self.z3[i] + s3 * self.alphn + s2 * self.betan;
                 }
-                cache.z1[i] += s1 * fac1;
-                cache.z2[i] = cache.z2[i] + s2 * alphn - s3 * betan;
-                cache.z3[i] = cache.z3[i] + s3 * alphn + s2 * betan;
+                sol(n, self.e1.view(), self.z1.view_mut(), self.ip1.view());
+                solc(
+                    n,
+                    self.e2r.view(),
+                    self.e2i.view(),
+                    self.z2.view_mut(),
+                    self.z3.view_mut(),
+                    self.ip2.view(),
+                );
             }
-            sol(n, cache.e1.view(), cache.z1.view_mut(), cache.ip1.view());
-            solc(
-                n,
-                cache.e2r.view(),
-                cache.e2i.view(),
-                cache.z2.view_mut(),
-                cache.z3.view_mut(),
-                cache.ip2.view(),
-            );
-        }
-        4 => {
-            // mass is a banded matrix, Jacobian a banded matrix
-            for i in 0..n {
-                let mut s1 = 0.0;
-                let mut s2 = 0.0;
-                let mut s3 = 0.0;
-                for j in 0.max(i - cache.mlmas)..n.min(i + cache.mumas + 1) {
-                    let bb = cache.mass_matrix[[i - j + cache.mbdiag - 1, j]];
-                    s1 -= bb * cache.f1[j];
-                    s2 -= bb * cache.f2[j];
-                    s3 -= bb * cache.f3[j];
+            2 => {
+                // mass = identity, Jacobian a banded matrix
+                for i in 0..n {
+                    let s2 = -self.f2[i];
+                    let s3 = -self.f3[i];
+                    self.z1[i] -= self.f1[i] * self.fac1;
+                    self.z2[i] = self.z2[i] + s2 * self.alphn - s3 * self.betan;
+                    self.z3[i] = self.z3[i] + s3 * self.alphn + s2 * self.betan;
                 }
-                cache.z1[i] += s1 * fac1;
-                cache.z2[i] = cache.z2[i] + s2 * alphn - s3 * betan;
-                cache.z3[i] = cache.z3[i] + s3 * alphn + s2 * betan;
+                solb(
+                    n,
+                    self.e1.view(),
+                    self.mle,
+                    self.mue,
+                    self.z1.view_mut(),
+                    self.ip1.view(),
+                );
+                solbc(
+                    n,
+                    self.e2r.view(),
+                    self.e2i.view(),
+                    self.mle,
+                    self.mue,
+                    self.z2.view_mut(),
+                    self.z3.view_mut(),
+                    self.ip2.view(),
+                );
             }
-            solb(
-                n,
-                cache.e1.view(),
-                cache.mle,
-                cache.mue,
-                cache.z1.view_mut(),
-                cache.ip1.view(),
-            );
-            solbc(
-                n,
-                cache.e2r.view(),
-                cache.e2i.view(),
-                cache.mle,
-                cache.mue,
-                cache.z2.view_mut(),
-                cache.z3.view_mut(),
-                cache.ip2.view(),
-            );
-        }
-        5 => {
-            // mass is a full matrix, Jacobian a full matrix
-            for i in 0..n {
-                let mut s1 = 0.0;
-                let mut s2 = 0.0;
-                let mut s3 = 0.0;
-                for j in 0..n {
-                    let bb = cache.mass_matrix[[i, j]];
-                    s1 -= bb * cache.f1[j];
-                    s2 -= bb * cache.f2[j];
-                    s3 -= bb * cache.f3[j];
+            3 => {
+                // mass is a banded matrix, Jacobian a full matrix
+                for i in 0..n {
+                    let mut s1 = 0.0;
+                    let mut s2 = 0.0;
+                    let mut s3 = 0.0;
+                    for j in 0.max(i - self.mlmas)..n.min(i + self.mumas + 1) {
+                        let bb = self.mass_matrix[[i - j + self.mbdiag - 1, j]];
+                        s1 -= bb * self.f1[j];
+                        s2 -= bb * self.f2[j];
+                        s3 -= bb * self.f3[j];
+                    }
+                    self.z1[i] += s1 * self.fac1;
+                    self.z2[i] = self.z2[i] + s2 * self.alphn - s3 * self.betan;
+                    self.z3[i] = self.z3[i] + s3 * self.alphn + s2 * self.betan;
                 }
-                cache.z1[i] += s1 * fac1;
-                cache.z2[i] = cache.z2[i] + s2 * alphn - s3 * betan;
-                cache.z3[i] = cache.z3[i] + s3 * alphn + s2 * betan;
+                sol(n, self.e1.view(), self.z1.view_mut(), self.ip1.view());
+                solc(
+                    n,
+                    self.e2r.view(),
+                    self.e2i.view(),
+                    self.z2.view_mut(),
+                    self.z3.view_mut(),
+                    self.ip2.view(),
+                );
             }
-            sol(n, cache.e1.view(), cache.z1.view_mut(), cache.ip1.view());
-            solc(
-                n,
-                cache.e2r.view(),
-                cache.e2i.view(),
-                cache.z2.view_mut(),
-                cache.z3.view_mut(),
-                cache.ip2.view(),
-            );
-        }
-        7 => {
-            // mass = identity, Jacobian a full matrix, Hessenberg-option
-            for i in 0..n {
-                let s2 = -cache.f2[i];
-                let s3 = -cache.f3[i];
-                cache.z1[i] -= cache.f1[i] * fac1;
-                cache.z2[i] = cache.z2[i] + s2 * alphn - s3 * betan;
-                cache.z3[i] = cache.z3[i] + s3 * alphn + s2 * betan;
-            }
-            for mm1 in 0..(n - 2) {
-                let mp = n - mm1 - 2;
-                let mp1 = mp - 1;
-                let ii = cache.iphes[mp] as usize;
-                if ii != mp {
-                    let mut zsafe = cache.z1[mp];
-                    cache.z1[mp] = cache.z1[ii];
-                    cache.z1[ii] = zsafe;
-                    zsafe = cache.z2[mp];
-                    cache.z2[mp] = cache.z2[ii];
-                    cache.z2[ii] = zsafe;
-                    zsafe = cache.z3[mp];
-                    cache.z3[mp] = cache.z3[ii];
-                    cache.z3[ii] = zsafe;
+            4 => {
+                // mass is a banded matrix, Jacobian a banded matrix
+                for i in 0..n {
+                    let mut s1 = 0.0;
+                    let mut s2 = 0.0;
+                    let mut s3 = 0.0;
+                    for j in 0.max(i - self.mlmas)..n.min(i + self.mumas + 1) {
+                        let bb = self.mass_matrix[[i - j + self.mbdiag - 1, j]];
+                        s1 -= bb * self.f1[j];
+                        s2 -= bb * self.f2[j];
+                        s3 -= bb * self.f3[j];
+                    }
+                    self.z1[i] += s1 * self.fac1;
+                    self.z2[i] = self.z2[i] + s2 * self.alphn - s3 * self.betan;
+                    self.z3[i] = self.z3[i] + s3 * self.alphn + s2 * self.betan;
                 }
-                for i in (mp + 1)..n {
-                    let e1imp = cache.dfdu[[i, mp1]];
-                    cache.z1[i] -= e1imp * cache.z1[mp];
-                    cache.z2[i] -= e1imp * cache.z2[mp];
-                    cache.z3[i] -= e1imp * cache.z3[mp];
+                solb(
+                    n,
+                    self.e1.view(),
+                    self.mle,
+                    self.mue,
+                    self.z1.view_mut(),
+                    self.ip1.view(),
+                );
+                solbc(
+                    n,
+                    self.e2r.view(),
+                    self.e2i.view(),
+                    self.mle,
+                    self.mue,
+                    self.z2.view_mut(),
+                    self.z3.view_mut(),
+                    self.ip2.view(),
+                );
+            }
+            5 => {
+                // mass is a full matrix, Jacobian a full matrix
+                for i in 0..n {
+                    let mut s1 = 0.0;
+                    let mut s2 = 0.0;
+                    let mut s3 = 0.0;
+                    for j in 0..n {
+                        let bb = self.mass_matrix[[i, j]];
+                        s1 -= bb * self.f1[j];
+                        s2 -= bb * self.f2[j];
+                        s3 -= bb * self.f3[j];
+                    }
+                    self.z1[i] += s1 * self.fac1;
+                    self.z2[i] = self.z2[i] + s2 * self.alphn - s3 * self.betan;
+                    self.z3[i] = self.z3[i] + s3 * self.alphn + s2 * self.betan;
                 }
+                sol(n, self.e1.view(), self.z1.view_mut(), self.ip1.view());
+                solc(
+                    n,
+                    self.e2r.view(),
+                    self.e2i.view(),
+                    self.z2.view_mut(),
+                    self.z3.view_mut(),
+                    self.ip2.view(),
+                );
             }
-            solh(n, cache.e1.view(), 1, cache.z1.view_mut(), cache.ip1.view());
-            solhc(
-                n,
-                cache.e2r.view(),
-                cache.e2i.view(),
-                1,
-                cache.z2.view_mut(),
-                cache.z3.view_mut(),
-                cache.ip2.view(),
-            );
-            for mm1 in 0..(n - 2) {
-                let mp = n - mm1 - 2;
-                let mp1 = mp - 1;
-                for i in mp..n {
-                    let e1imp = cache.dfdu[[i, mp1]];
-                    cache.z1[i] += e1imp * cache.z1[mp];
-                    cache.z2[i] += e1imp * cache.z2[mp];
-                    cache.z3[i] += e1imp * cache.z3[mp];
+            7 => {
+                // mass = identity, Jacobian a full matrix, Hessenberg-option
+                for i in 0..n {
+                    let s2 = -self.f2[i];
+                    let s3 = -self.f3[i];
+                    self.z1[i] -= self.f1[i] * self.fac1;
+                    self.z2[i] = self.z2[i] + s2 * self.alphn - s3 * self.betan;
+                    self.z3[i] = self.z3[i] + s3 * self.alphn + s2 * self.betan;
                 }
-                let ii = cache.iphes[mp] as usize;
-                if ii != mp {
-                    let mut zsafe = cache.z1[mp];
-                    cache.z1[mp] = cache.z1[ii];
-                    cache.z1[ii] = zsafe;
-                    zsafe = cache.z2[mp];
-                    cache.z2[mp] = cache.z2[ii];
-                    cache.z2[ii] = zsafe;
-                    zsafe = cache.z3[mp];
-                    cache.z3[mp] = cache.z3[ii];
-                    cache.z3[ii] = zsafe;
+                for mm1 in (0..(n - 2)).rev() {
+                    let mp = n - mm1 - 2;
+                    let mp1 = mp - 1;
+                    let ii = self.iphes[mp] as usize;
+                    if ii != mp {
+                        let mut zsafe = self.z1[mp];
+                        self.z1[mp] = self.z1[ii];
+                        self.z1[ii] = zsafe;
+                        zsafe = self.z2[mp];
+                        self.z2[mp] = self.z2[ii];
+                        self.z2[ii] = zsafe;
+                        zsafe = self.z3[mp];
+                        self.z3[mp] = self.z3[ii];
+                        self.z3[ii] = zsafe;
+                    }
+                    for i in (mp + 1)..n {
+                        let e1imp = self.dfdu[[i, mp1]];
+                        self.z1[i] -= e1imp * self.z1[mp];
+                        self.z2[i] -= e1imp * self.z2[mp];
+                        self.z3[i] -= e1imp * self.z3[mp];
+                    }
                 }
-            }
-        }
-        11 | 12 => {
-            for i in 0..n {
-                let s2 = -cache.f2[i];
-                let s3 = -cache.f3[i];
-                cache.z1[i] -= cache.f1[i] * fac1;
-                cache.z2[i] = cache.z2[i] + s2 * alphn - s3 * betan;
-                cache.z3[i] = cache.z3[i] + s3 * alphn + s2 * betan;
-            }
-        }
-        13 | 14 => {
-            for i in 0..cache.m1 {
-                let s2 = -cache.f2[i];
-                let s3 = -cache.f3[i];
-                cache.z1[i] -= cache.f1[i] * fac1;
-                cache.z2[i] = cache.z2[i] + s2 * alphn - s3 * betan;
-                cache.z3[i] = cache.z3[i] + s3 * alphn + s2 * betan;
-            }
-            for i in 0..nm1 {
-                let mut s1 = 0.0;
-                let mut s2 = 0.0;
-                let mut s3 = 0.0;
-                for j in 0.max(i - cache.mlmas)..nm1.min(i + cache.mumas + 1) {
-                    let bb = cache.mass_matrix[[i - j + cache.mbdiag - 1, j]];
-                    s1 -= bb * cache.f1[j + cache.m1];
-                    s2 -= bb * cache.f2[j + cache.m1];
-                    s3 -= bb * cache.f3[j + cache.m1];
-                }
-                cache.z1[i + cache.m1] += s1 * fac1;
-                cache.z2[i + cache.m1] = cache.z2[i + cache.m1] + s2 * alphn - s3 * betan;
-                cache.z3[i + cache.m1] = cache.z3[i + cache.m1] + s3 * alphn + s2 * betan;
-            }
-        }
-        15 => {
-            for i in 0..cache.m1 {
-                let s2 = -cache.f2[i];
-                let s3 = -cache.f3[i];
-                cache.z1[i] -= cache.f1[i] * fac1;
-                cache.z2[i] = cache.z2[i] + s2 * alphn - s3 * betan;
-                cache.z3[i] = cache.z3[i] + s3 * alphn + s2 * betan;
-            }
-            for i in 0..nm1 {
-                let mut s1 = 0.0;
-                let mut s2 = 0.0;
-                let mut s3 = 0.0;
-                for j in 0..nm1 {
-                    let bb = cache.mass_matrix[[i, j]];
-                    s1 -= bb * cache.f1[j + cache.m1];
-                    s2 -= bb * cache.f2[j + cache.m1];
-                    s3 -= bb * cache.f3[j + cache.m1];
-                }
-                cache.z1[i + cache.m1] += s1 * fac1;
-                cache.z2[i + cache.m1] = cache.z2[i + cache.m1] + s2 * alphn - s3 * betan;
-                cache.z3[i + cache.m1] = cache.z3[i + cache.m1] + s3 * alphn + s2 * betan;
-            }
-        }
-        _ => {}
-    }
-
-    match cache.prob_type {
-        11 | 13 | 15 => {
-            let abno = alphn * alphn + betan * betan;
-            let mm = cache.m1 / cache.m2;
-            for j in 0..cache.m2 {
-                let mut sum1 = 0.0;
-                let mut sum2 = 0.0;
-                let mut sum3 = 0.0;
-                for k in 0..mm {
-                    let jkm = j + k * cache.m2;
-                    sum1 = (cache.z1[jkm] + sum1) / fac1;
-                    let sumh = (cache.z2[jkm] + sum2) / abno;
-                    sum3 = (cache.z3[jkm] + sum3) / abno;
-                    sum2 = sumh * alphn + sum3 * betan;
-                    sum3 = sum3 * alphn - sumh * betan;
-                    for i in 0..nm1 {
-                        cache.z1[i + cache.m1] += cache.dfdu[[i, jkm]] * sum1;
-                        cache.z2[i + cache.m1] += cache.dfdu[[i, jkm]] * sum2;
-                        cache.z3[i + cache.m1] += cache.dfdu[[i, jkm]] * sum3;
+                solh(n, self.e1.view(), 1, self.z1.view_mut(), self.ip1.view());
+                solhc(
+                    n,
+                    self.e2r.view(),
+                    self.e2i.view(),
+                    1,
+                    self.z2.view_mut(),
+                    self.z3.view_mut(),
+                    self.ip2.view(),
+                );
+                for mm1 in 0..(n - 2) {
+                    let mp = n - mm1 - 2;
+                    let mp1 = mp - 1;
+                    for i in mp..n {
+                        let e1imp = self.dfdu[[i, mp1]];
+                        self.z1[i] += e1imp * self.z1[mp];
+                        self.z2[i] += e1imp * self.z2[mp];
+                        self.z3[i] += e1imp * self.z3[mp];
+                    }
+                    let ii = self.iphes[mp] as usize;
+                    if ii != mp {
+                        let mut zsafe = self.z1[mp];
+                        self.z1[mp] = self.z1[ii];
+                        self.z1[ii] = zsafe;
+                        zsafe = self.z2[mp];
+                        self.z2[mp] = self.z2[ii];
+                        self.z2[ii] = zsafe;
+                        zsafe = self.z3[mp];
+                        self.z3[mp] = self.z3[ii];
+                        self.z3[ii] = zsafe;
                     }
                 }
             }
-
-            sol(
-                nm1,
-                cache.e1.view(),
-                cache.z1.slice_mut(s![cache.m1..]),
-                cache.ip1.view(),
-            );
-            solc(
-                nm1,
-                cache.e2r.view(),
-                cache.e2i.view(),
-                cache.z2.slice_mut(s![cache.m1..]),
-                cache.z3.slice_mut(s![cache.m1..]),
-                cache.ip2.view(),
-            );
-        }
-        12 | 14 => {
-            let abno = alphn * alphn + betan * betan;
-            let mm = cache.m1 / cache.m2;
-            for j in 0..cache.m2 {
-                let mut sum1 = 0.0;
-                let mut sum2 = 0.0;
-                let mut sum3 = 0.0;
-                for k in 0..mm {
-                    let jkm = j + k * cache.m2;
-                    sum1 = (cache.z1[jkm] + sum1) / fac1;
-                    let sumh = (cache.z2[jkm] + sum2) / abno;
-                    sum3 = (cache.z3[jkm] + sum3) / abno;
-                    sum2 = sumh * alphn + sum3 * betan;
-                    sum3 = sum3 * alphn - sumh * betan;
-                    for i in 0.max(j - cache.mujac)..nm1.min(j + cache.mljac + 1) {
-                        let ffja = cache.dfdu[[i + cache.mujac - j, jkm]];
-                        cache.z1[i + cache.m1] += ffja * sum1;
-                        cache.z2[i + cache.m1] += ffja * sum2;
-                        cache.z3[i + cache.m1] += ffja * sum3;
-                    }
+            11 | 12 => {
+                for i in 0..n {
+                    let s2 = -self.f2[i];
+                    let s3 = -self.f3[i];
+                    self.z1[i] -= self.f1[i] * self.fac1;
+                    self.z2[i] = self.z2[i] + s2 * self.alphn - s3 * self.betan;
+                    self.z3[i] = self.z3[i] + s3 * self.alphn + s2 * self.betan;
                 }
             }
-            solb(
-                nm1,
-                cache.e1.view(),
-                cache.mle,
-                cache.mue,
-                cache.z1.slice_mut(s![cache.m1..]),
-                cache.ip1.view(),
-            );
-            solbc(
-                nm1,
-                cache.e2r.view(),
-                cache.e2i.view(),
-                cache.mle,
-                cache.mue,
-                cache.z2.slice_mut(s![cache.m1..]),
-                cache.z3.slice_mut(s![cache.m1..]),
-                cache.ip2.view(),
-            );
+            13 | 14 => {
+                for i in 0..self.m1 {
+                    let s2 = -self.f2[i];
+                    let s3 = -self.f3[i];
+                    self.z1[i] -= self.f1[i] * self.fac1;
+                    self.z2[i] = self.z2[i] + s2 * self.alphn - s3 * self.betan;
+                    self.z3[i] = self.z3[i] + s3 * self.alphn + s2 * self.betan;
+                }
+                for i in 0..nm1 {
+                    let mut s1 = 0.0;
+                    let mut s2 = 0.0;
+                    let mut s3 = 0.0;
+                    for j in 0.max(i - self.mlmas)..nm1.min(i + self.mumas + 1) {
+                        let bb = self.mass_matrix[[i - j + self.mbdiag - 1, j]];
+                        s1 -= bb * self.f1[j + self.m1];
+                        s2 -= bb * self.f2[j + self.m1];
+                        s3 -= bb * self.f3[j + self.m1];
+                    }
+                    self.z1[i + self.m1] += s1 * self.fac1;
+                    self.z2[i + self.m1] = self.z2[i + self.m1] + s2 * self.alphn - s3 * self.betan;
+                    self.z3[i + self.m1] = self.z3[i + self.m1] + s3 * self.alphn + s2 * self.betan;
+                }
+            }
+            15 => {
+                for i in 0..self.m1 {
+                    let s2 = -self.f2[i];
+                    let s3 = -self.f3[i];
+                    self.z1[i] -= self.f1[i] * self.fac1;
+                    self.z2[i] = self.z2[i] + s2 * self.alphn - s3 * self.betan;
+                    self.z3[i] = self.z3[i] + s3 * self.alphn + s2 * self.betan;
+                }
+                for i in 0..nm1 {
+                    let mut s1 = 0.0;
+                    let mut s2 = 0.0;
+                    let mut s3 = 0.0;
+                    for j in 0..nm1 {
+                        let bb = self.mass_matrix[[i, j]];
+                        s1 -= bb * self.f1[j + self.m1];
+                        s2 -= bb * self.f2[j + self.m1];
+                        s3 -= bb * self.f3[j + self.m1];
+                    }
+                    self.z1[i + self.m1] += s1 * self.fac1;
+                    self.z2[i + self.m1] = self.z2[i + self.m1] + s2 * self.alphn - s3 * self.betan;
+                    self.z3[i + self.m1] = self.z3[i + self.m1] + s3 * self.alphn + s2 * self.betan;
+                }
+            }
+            _ => {}
         }
-        _ => {}
+
+        match self.prob_type {
+            11 | 13 | 15 => {
+                let abno = self.alphn * self.alphn + self.betan * self.betan;
+                let mm = self.m1 / self.m2;
+                for j in 0..self.m2 {
+                    let mut sum1 = 0.0;
+                    let mut sum2 = 0.0;
+                    let mut sum3 = 0.0;
+                    for k in (0..mm).rev() {
+                        let jkm = j + k * self.m2;
+                        sum1 = (self.z1[jkm] + sum1) / self.fac1;
+                        let sumh = (self.z2[jkm] + sum2) / abno;
+                        sum3 = (self.z3[jkm] + sum3) / abno;
+                        sum2 = sumh * self.alphn + sum3 * self.betan;
+                        sum3 = sum3 * self.alphn - sumh * self.betan;
+                        for i in 0..nm1 {
+                            self.z1[i + self.m1] += self.dfdu[[i, jkm]] * sum1;
+                            self.z2[i + self.m1] += self.dfdu[[i, jkm]] * sum2;
+                            self.z3[i + self.m1] += self.dfdu[[i, jkm]] * sum3;
+                        }
+                    }
+                }
+
+                sol(
+                    nm1,
+                    self.e1.view(),
+                    self.z1.slice_mut(s![self.m1..]),
+                    self.ip1.view(),
+                );
+                solc(
+                    nm1,
+                    self.e2r.view(),
+                    self.e2i.view(),
+                    self.z2.slice_mut(s![self.m1..]),
+                    self.z3.slice_mut(s![self.m1..]),
+                    self.ip2.view(),
+                );
+            }
+            12 | 14 => {
+                let abno = self.alphn * self.alphn + self.betan * self.betan;
+                let mm = self.m1 / self.m2;
+                for j in 0..self.m2 {
+                    let mut sum1 = 0.0;
+                    let mut sum2 = 0.0;
+                    let mut sum3 = 0.0;
+                    for k in 0..mm {
+                        let jkm = j + k * self.m2;
+                        sum1 = (self.z1[jkm] + sum1) / self.fac1;
+                        let sumh = (self.z2[jkm] + sum2) / abno;
+                        sum3 = (self.z3[jkm] + sum3) / abno;
+                        sum2 = sumh * self.alphn + sum3 * self.betan;
+                        sum3 = sum3 * self.alphn - sumh * self.betan;
+                        for i in 0.max(j - self.mujac)..nm1.min(j + self.mljac + 1) {
+                            let ffja = self.dfdu[[i + self.mujac - j, jkm]];
+                            self.z1[i + self.m1] += ffja * sum1;
+                            self.z2[i + self.m1] += ffja * sum2;
+                            self.z3[i + self.m1] += ffja * sum3;
+                        }
+                    }
+                }
+                solb(
+                    nm1,
+                    self.e1.view(),
+                    self.mle,
+                    self.mue,
+                    self.z1.slice_mut(s![self.m1..]),
+                    self.ip1.view(),
+                );
+                solbc(
+                    nm1,
+                    self.e2r.view(),
+                    self.e2i.view(),
+                    self.mle,
+                    self.mue,
+                    self.z2.slice_mut(s![self.m1..]),
+                    self.z3.slice_mut(s![self.m1..]),
+                    self.ip2.view(),
+                );
+            }
+            _ => {}
+        }
     }
 }
