@@ -1,4 +1,3 @@
-use crate::radau::prob_type::Radau5ProbType;
 use ndarray::prelude::*;
 
 pub struct Radau5Cache {
