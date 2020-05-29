@@ -6,7 +6,7 @@ use ndarray::prelude::*;
 /// Radau5
 pub(crate) fn decomp_real(cache: &mut Radau5Cache, fac1: f64) -> usize {
     let n = cache.e1.nrows();
-    let nm1 = n - 1;
+    let nm1 = n - cache.m1;
     let mut ier = 0;
 
     match cache.prob_type {
@@ -178,7 +178,7 @@ pub(crate) fn decomp_real(cache: &mut Radau5Cache, fac1: f64) -> usize {
 /// Radau5
 pub(crate) fn decomp_complex(cache: &mut Radau5Cache, alphn: f64, betan: f64) -> usize {
     let n = cache.e1.nrows();
-    let nm1 = n - 1;
+    let nm1 = n - cache.m1;
     let mut ier = 0;
 
     match cache.prob_type {
