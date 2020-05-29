@@ -7,8 +7,7 @@ use ndarray::prelude::*;
 /// are stored in `ip`. Returns an error code which will be equal to zero if
 /// decomposition is successful and a non-zero number which stage matrix was
 /// found to be singular otherwise.
-pub(crate) fn dec(mut a: ArrayViewMut2<f64>, mut ip: ArrayViewMut1<i32>) -> usize {
-    let n = a.nrows();
+pub(crate) fn dec(n: usize, mut a: ArrayViewMut2<f64>, mut ip: ArrayViewMut1<i32>) -> usize {
     let mut ier = 0;
     ip[n - 1] = 1;
     if n != 1 {
@@ -63,8 +62,12 @@ pub(crate) fn dec(mut a: ArrayViewMut2<f64>, mut ip: ArrayViewMut1<i32>) -> usiz
 /// are stored in `ip`. Returns an error code which will be equal to zero if
 /// decomposition is successful and a non-zero number which stage matrix was
 /// found to be singular otherwise.
-pub(crate) fn dech(mut a: ArrayViewMut2<f64>, lb: usize, mut ip: ArrayViewMut1<i32>) -> usize {
-    let n = a.nrows();
+pub(crate) fn dech(
+    n: usize,
+    mut a: ArrayViewMut2<f64>,
+    lb: usize,
+    mut ip: ArrayViewMut1<i32>,
+) -> usize {
     let mut ier = 0;
     ip[n - 1] = 1;
     if n != 1 {
@@ -121,11 +124,11 @@ pub(crate) fn dech(mut a: ArrayViewMut2<f64>, lb: usize, mut ip: ArrayViewMut1<i
 /// decomposition is successful and a non-zero number which stage matrix was
 /// found to be singular otherwise.
 pub(crate) fn decc(
+    n: usize,
     mut ar: ArrayViewMut2<f64>,
     mut ai: ArrayViewMut2<f64>,
     mut ip: ArrayViewMut1<i32>,
 ) -> usize {
-    let n = ar.nrows();
     let mut ier = 0;
     ip[n - 1] = 1;
     if n != 1 {
@@ -210,12 +213,12 @@ pub(crate) fn decc(
 /// decomposition is successful and a non-zero number which stage matrix was
 /// found to be singular otherwise.
 pub(crate) fn dechc(
+    n: usize,
     mut ar: ArrayViewMut2<f64>,
     mut ai: ArrayViewMut2<f64>,
     lb: usize,
     mut ip: ArrayViewMut1<i32>,
 ) -> usize {
-    let n = ar.nrows();
     let mut ier = 0;
     ip[n - 1] = 1;
     if (n != 1) && (lb != 0) {
@@ -301,12 +304,12 @@ pub(crate) fn dechc(
 /// decomposition is successful and a non-zero number which stage matrix was
 /// found to be singular otherwise.
 pub(crate) fn decb(
+    n: usize,
     mut a: ArrayViewMut2<f64>,
     lb: usize,
     ub: usize,
     mut ip: ArrayViewMut1<i32>,
 ) -> usize {
-    let n = a.nrows();
     let mut ier = 0;
     ip[n - 1] = 1;
     let md = ub + lb;
@@ -384,13 +387,13 @@ pub(crate) fn decb(
 /// decomposition is successful and a non-zero number which stage matrix was
 /// found to be singular otherwise.
 pub(crate) fn decbc(
+    n: usize,
     mut ar: ArrayViewMut2<f64>,
     mut ai: ArrayViewMut2<f64>,
     lb: usize,
     ub: usize,
     mut ip: ArrayViewMut1<i32>,
 ) -> usize {
-    let n = ar.nrows();
     let mut ier = 0;
     ip[n - 1] = 1;
     let md = lb + ub;
@@ -494,6 +497,62 @@ pub(crate) fn decbc(
     return ier;
 }
 
+pub(crate) fn elmhes(
+    n: usize,
+    low: usize,
+    igh: usize,
+    mut a: ArrayViewMut2<f64>,
+    mut inter: ArrayViewMut1<i32>,
+) {
+    let la = igh - 2;
+    let kp1 = low + 1;
+    if la < kp1 {
+        return;
+    }
+    for m in kp1..(la + 1) {
+        let mm1 = m - 1;
+        let mut x: f64 = 0.0;
+        let mut ii = m;
+        for j in m..igh {
+            if a[[j, mm1]].abs() > x.abs() {
+                x = a[[j, mm1]];
+                ii = j;
+            }
+        }
+        inter[m] = ii as i32;
+        if ii != m {
+            // interchange rows and columns of a
+            for j in mm1..n {
+                let y = a[[ii, j]];
+                a[[ii, j]] = a[[m, j]];
+                a[[m, j]] = y;
+            }
+            for j in 0..igh {
+                let y = a[[j, ii]];
+                a[[j, ii]] = a[[j, m]];
+                a[[j, m]] = y;
+            }
+        }
+        if x != 0.0 {
+            let mp1 = m + 1;
+            for i in mp1..igh {
+                let mut y = a[[i, mm1]];
+                if y == 0.0 {
+                    return;
+                }
+                y = y / x;
+                a[[i, mm1]] = y;
+                for j in m..n {
+                    a[[i, j]] -= y * a[[m, j]];
+                }
+                for j in 0..igh {
+                    a[[i, m]] += y * a[[j, i]];
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -506,7 +565,7 @@ mod test {
             [0.875906, 0.662457, 0.130995]
         ];
         let mut ip: Array1<i32> = Array::zeros(3);
-        let ier = dec(a.view_mut(), ip.view_mut());
+        let ier = dec(3, a.view_mut(), ip.view_mut());
         println!("a = {:?}", a);
         println!("ip = {:?}", ip);
         println!("ier = {:?}", ier);

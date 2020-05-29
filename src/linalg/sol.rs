@@ -3,8 +3,7 @@
 
 use ndarray::prelude::*;
 
-pub(crate) fn sol(a: ArrayView2<f64>, mut b: ArrayViewMut1<f64>, ip: ArrayView1<i32>) {
-    let n = a.nrows();
+pub(crate) fn sol(n: usize, a: ArrayView2<f64>, mut b: ArrayViewMut1<f64>, ip: ArrayView1<i32>) {
     if n != 1 {
         let nm1 = n - 1;
         for k in 0..nm1 {
@@ -30,8 +29,13 @@ pub(crate) fn sol(a: ArrayView2<f64>, mut b: ArrayViewMut1<f64>, ip: ArrayView1<
     b[0] = b[0] / a[[0, 0]];
 }
 
-pub(crate) fn solh(a: ArrayView2<f64>, lb: usize, mut b: ArrayViewMut1<f64>, ip: ArrayView1<i32>) {
-    let n = a.nrows();
+pub(crate) fn solh(
+    n: usize,
+    a: ArrayView2<f64>,
+    lb: usize,
+    mut b: ArrayViewMut1<f64>,
+    ip: ArrayView1<i32>,
+) {
     if n != 1 {
         let nm1 = n - 1;
         for k in 0..nm1 {
@@ -59,13 +63,13 @@ pub(crate) fn solh(a: ArrayView2<f64>, lb: usize, mut b: ArrayViewMut1<f64>, ip:
 }
 
 pub(crate) fn solc(
+    n: usize,
     ar: ArrayView2<f64>,
     ai: ArrayView2<f64>,
     mut br: ArrayViewMut1<f64>,
     mut bi: ArrayViewMut1<f64>,
     ip: ArrayView1<i32>,
 ) {
-    let n = ar.nrows();
     if n != 1 {
         let nm1 = n - 1;
         for k in 0..nm1 {
@@ -110,6 +114,7 @@ pub(crate) fn solc(
 }
 
 pub(crate) fn solhc(
+    n: usize,
     ar: ArrayView2<f64>,
     ai: ArrayView2<f64>,
     lb: usize,
@@ -117,7 +122,6 @@ pub(crate) fn solhc(
     mut bi: ArrayViewMut1<f64>,
     ip: ArrayView1<i32>,
 ) {
-    let n = ar.nrows();
     if n != 1 {
         let nm1 = n - 1;
         if lb != 0 {
@@ -163,13 +167,13 @@ pub(crate) fn solhc(
     bi[0] = prodi / den;
 }
 pub(crate) fn solb(
+    n: usize,
     a: ArrayView2<f64>,
     lb: usize,
     ub: usize,
     mut b: ArrayViewMut1<f64>,
     ip: ArrayView1<i32>,
 ) {
-    let n = a.nrows();
     let md = lb + ub;
     let md1 = md + 1;
     let mdm = md - 1;
@@ -204,6 +208,7 @@ pub(crate) fn solb(
 }
 
 pub(crate) fn solbc(
+    n: usize,
     ar: ArrayView2<f64>,
     ai: ArrayView2<f64>,
     lb: usize,
@@ -212,7 +217,6 @@ pub(crate) fn solbc(
     mut bi: ArrayViewMut1<f64>,
     ip: ArrayView1<i32>,
 ) {
-    let n = ar.nrows();
     let md = lb + ub;
     let md1 = md + 1;
     let mdm = md - 1;
@@ -279,8 +283,8 @@ mod test {
         ];
         let mut ip: Array1<i32> = Array::zeros(3);
         let mut b = array![1.0, 2.0, 3.0];
-        let ier = dec(a.view_mut(), ip.view_mut());
-        sol(a.view(), b.view_mut(), ip.view());
+        let ier = dec(3, a.view_mut(), ip.view_mut());
+        sol(3, a.view(), b.view_mut(), ip.view());
 
         assert!((b[0] - 3.822307555684841).abs() < 1e-15);
         assert!((b[1] + 3.822307555684841).abs() < 1e-15);
@@ -297,8 +301,8 @@ mod test {
         ];
         let mut ip = Array1::<i32>::zeros(4);
         let mut b = array![1.0, 2.0, 3.0, 4.0];
-        let ier = dech(a.view_mut(), 1, ip.view_mut());
-        solh(a.view(), 1, b.view_mut(), ip.view());
+        let ier = dech(4, a.view_mut(), 1, ip.view_mut());
+        solh(4, a.view(), 1, b.view_mut(), ip.view());
 
         assert!((b[0] + 6.000000000000000).abs() < 1e-15);
         assert!((b[1] - 1.571428571428571).abs() < 1e-15);
@@ -322,8 +326,9 @@ mod test {
         let mut br = array![1.0, 2.0, 3.0];
         let mut bi = array![2f64.sqrt(), 0.0, 3f64.sqrt()];
 
-        let ier = decc(ar.view_mut(), ai.view_mut(), ip.view_mut());
+        let ier = decc(3, ar.view_mut(), ai.view_mut(), ip.view_mut());
         solc(
+            3,
             ar.view(),
             ai.view(),
             br.view_mut(),
