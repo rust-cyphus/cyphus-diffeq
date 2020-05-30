@@ -1,6 +1,6 @@
 /// Statistics for a differential equation integration
-#[derive(Debug)]
-pub struct DEStatistics {
+#[derive(Debug, Clone)]
+pub struct OdeStats {
     /// Number of steps taken
     pub steps: usize,
     /// Number of function evaluations
@@ -17,9 +17,9 @@ pub struct DEStatistics {
     pub rejects: usize,
 }
 
-impl DEStatistics {
+impl OdeStats {
     pub fn new() -> Self {
-        DEStatistics {
+        OdeStats {
             /// Number of steps taken
             steps: 0,
             function_evals: 0,
