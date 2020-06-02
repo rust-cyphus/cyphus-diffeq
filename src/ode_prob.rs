@@ -34,14 +34,19 @@ impl std::fmt::Debug for OdeProblemBuildErr {
 ///     ODE:                u'_{i}(t) = f_{i}(u_1,...,u_n, t)
 ///     Initial conditions: u'_{i}(t_0) = u_{0,i}
 ///     Domain:             t0 <= t <= tf
-pub struct OdeProblem {
+pub struct OdeProblem<F, J>
+where
+    F: Fn(ArrayViewMut1<f64>, ArrayView1<f64>, f64),
+    J: Fn(ArrayViewMut2<f64>, ArrayView1<f64>, f64),
+{
     /// RHS of the ordinary differential equation. Should be of the form:
     /// dudt = dudt(du, u, t) where `du` is modified in place.
-    pub dudt: fn(ArrayViewMut1<f64>, ArrayView1<f64>, f64),
+    pub dudt: F,
     /// Jacobian of the RHS of the ordinary differential equation. Should be of
     /// the form: dfdu = dfdu(df, u, t) where the jacobian `df` is modified in
     /// place.
-    pub dfdu: Option<fn(ArrayViewMut2<f64>, ArrayView1<f64>, f64)>,
+    pub dfdu: Option<J>,
+    /// Mass matrix for DAE.
     pub mass_matrix: Option<Array2<f64>>,
     /// Initial conditions.
     pub uinit: Array1<f64>,
@@ -68,14 +73,18 @@ pub struct OdeProblem {
     pub mm_lbw: usize,
 }
 
-pub struct OdeProblemBuilder {
+pub struct OdeProblemBuilder<F, J>
+where
+    F: Fn(ArrayViewMut1<f64>, ArrayView1<f64>, f64),
+    J: Fn(ArrayViewMut2<f64>, ArrayView1<f64>, f64),
+{
     /// RHS of the ordinary differential equation. Should be of the form:
     /// dudt = dudt(du, u, t) where `du` is modified in place.
-    pub dudt: fn(ArrayViewMut1<f64>, ArrayView1<f64>, f64),
+    pub dudt: F,
     /// Jacobian of the RHS of the ordinary differential equation. Should be of
     /// the form: dfdu = dfdu(df, u, t) where the jacobian `df` is modified in
     /// place.
-    pub dfdu: Option<fn(ArrayViewMut2<f64>, ArrayView1<f64>, f64)>,
+    pub dfdu: Option<J>,
     /// Mass matrix of the system (differential-algebraic system): Mu'(t) = f(u,t).
     pub mass_matrix: Option<Array2<f64>>,
     /// Initial conditions.
@@ -103,12 +112,12 @@ pub struct OdeProblemBuilder {
     pub(crate) mm_lbw: Option<usize>,
 }
 
-impl OdeProblemBuilder {
-    pub fn default(
-        dudt: fn(ArrayViewMut1<f64>, ArrayView1<f64>, f64),
-        uinit: Array1<f64>,
-        tspan: (f64, f64),
-    ) -> OdeProblemBuilder {
+impl<F, J> OdeProblemBuilder<F, J>
+where
+    F: Fn(ArrayViewMut1<f64>, ArrayView1<f64>, f64),
+    J: Fn(ArrayViewMut2<f64>, ArrayView1<f64>, f64),
+{
+    pub fn default(dudt: F, uinit: Array1<f64>, tspan: (f64, f64)) -> OdeProblemBuilder<F, J> {
         let n = uinit.shape()[0];
         OdeProblemBuilder {
             dudt,
@@ -128,61 +137,58 @@ impl OdeProblemBuilder {
         }
     }
     /// Add a jacobian to the builder.
-    pub fn with_jac(
-        mut self,
-        dfdu: fn(ArrayViewMut2<f64>, ArrayView1<f64>, f64),
-    ) -> OdeProblemBuilder {
+    pub fn with_jac(mut self, dfdu: J) -> OdeProblemBuilder<F, J> {
         self.dfdu = Some(dfdu);
         self
     }
     /// Add a mass matrix to the builder.
-    pub fn with_mass(mut self, mass_matrix: Array2<f64>) -> OdeProblemBuilder {
+    pub fn with_mass(mut self, mass_matrix: Array2<f64>) -> OdeProblemBuilder<F, J> {
         self.mass_matrix = Some(mass_matrix);
         self
     }
     /// Specify the number of index-1 variables of the differential-algebraic
     /// system. An index-1 problem is one in which the system can be converted
     /// into an ODE by taking a single derivive of one of the equations.
-    pub fn num_index1_vars(mut self, val: usize) -> OdeProblemBuilder {
+    pub fn num_index1_vars(mut self, val: usize) -> OdeProblemBuilder<F, J> {
         self.num_index1_vars = Some(val);
         self
     }
     /// Specify the number of index-2 variables of the differential-algebraic
     /// system. An index-2 problem is one in which the system can be converted
     /// into an ODE by taking derivatives of two of the equations.
-    pub fn num_index2_vars(mut self, val: usize) -> OdeProblemBuilder {
+    pub fn num_index2_vars(mut self, val: usize) -> OdeProblemBuilder<F, J> {
         self.num_index2_vars = Some(val);
         self
     }
     /// Specify the number of index-3 variables of the differential-algebraic
     /// system. An index-3 problem is one in which the system can be converted
     /// into an ODE by taking derivatives of three of the equations.
-    pub fn num_index3_vars(mut self, val: usize) -> OdeProblemBuilder {
+    pub fn num_index3_vars(mut self, val: usize) -> OdeProblemBuilder<F, J> {
         self.num_index3_vars = Some(val);
         self
     }
     /// Specify the second order parameters m1, and m2 of the problem. These
     /// are defined such that u'[i] = u[i+m2] for i = 1,...,m1 which is a
     /// structure that often occurs for second-order differential equations.
-    pub fn second_order_params(mut self, val: (usize, usize)) -> OdeProblemBuilder {
+    pub fn second_order_params(mut self, val: (usize, usize)) -> OdeProblemBuilder<F, J> {
         self.m1 = Some(val.0);
         self.m2 = Some(val.1);
         self
     }
     /// Specify the lower and upper bandwidths of the Jacobian.
-    pub fn jac_bandwidths(mut self, val: (usize, usize)) -> OdeProblemBuilder {
+    pub fn jac_bandwidths(mut self, val: (usize, usize)) -> OdeProblemBuilder<F, J> {
         self.jac_lbw = Some(val.0);
         self.jac_ubw = Some(val.1);
         self
     }
     /// Specify the lower and upper bandwidths of the mass matrix.
-    pub fn mass_bandwidths(mut self, val: (usize, usize)) -> OdeProblemBuilder {
+    pub fn mass_bandwidths(mut self, val: (usize, usize)) -> OdeProblemBuilder<F, J> {
         self.mm_lbw = Some(val.0);
         self.mm_ubw = Some(val.1);
         self
     }
-    /// Build the OdeProblem.
-    pub fn build(self) -> Result<OdeProblem, OdeProblemBuildErr> {
+    /// Try to build the OdeProblem.
+    pub fn build(self) -> Result<OdeProblem<F, J>, OdeProblemBuildErr> {
         let n = self.uinit.shape()[0];
 
         let nind1 = self.num_index1_vars.unwrap_or(n);
@@ -271,7 +277,6 @@ mod test {
             .with_mass(mass_matrix)
             .build()
             .unwrap();
-        //let prob = OdeProblem::with_jac(dudt, dfdu, uinit, tspan);
 
         let mut u = array![0.0, 1.0];
         let mut du = Array1::<f64>::zeros(2);
