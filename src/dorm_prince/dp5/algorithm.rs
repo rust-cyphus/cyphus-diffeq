@@ -1,19 +1,18 @@
+use super::cache::DormandPrince5Cache;
 use super::DormandPrince5;
 use crate::ode::*;
 
+use ndarray::prelude::*;
+
 impl OdeAlgorithm for DormandPrince5 {
     type Cache = super::cache::DormandPrince5Cache;
-    fn init<T: OdeFunction>(prob: OdeProblem<T>) -> OdeIntegrator<T, Self>
-    where
-        Self: Sized,
-    {
-        let mut cache = super::cache::DormandPrince5Cache::new(&prob);
-        let opts = OdeIntegratorOpts {
+    fn default_opts() -> OdeIntegratorOpts {
+        OdeIntegratorOpts {
             reltol: 1e-3,
             abstol: 1e-6,
             dense: false,
             dtstart: 1e-6,
-            dtmax: prob.tspan.1 - prob.tspan.0,
+            dtmax: f64::INFINITY,
             max_steps: 100000,
             beta: 0.04,
             max_newt_iter: 0,
@@ -27,34 +26,38 @@ impl OdeAlgorithm for DormandPrince5 {
             fnewt: 0.0,
             use_ext_col: false,
             hess: false,
-        };
-        let mut func = prob.func;
-        // Initialize the solution
-        let mut sol = OdeSolution::new();
-        sol.ts.push(prob.tspan.0);
-        sol.us.push(prob.uinit.clone());
-        // Initialize the cache
-        func.dudt(cache.du.view_mut(), prob.uinit.view(), prob.tspan.0);
+        }
+    }
+    fn new_cache<T: OdeFunction>(integrator: &mut OdeIntegratorBuilder<T, Self>) -> Self::Cache {
+        let n = integrator.u.len();
+        let mut du = Array1::<f64>::zeros(n);
 
-        OdeIntegrator {
-            func,
-            mass_matrix: prob.mass_matrix,
-            u: prob.uinit.clone(),
-            t: prob.tspan.0,
-            dt: 1e-6,
-            uprev: prob.uinit.clone(),
-            tprev: prob.tspan.0,
-            dtprev: 1e-6,
-            tdir: if prob.tspan.1 > prob.tspan.0 {
-                1.0
-            } else {
-                0.0
-            },
-            tfinal: prob.tspan.1,
-            sol,
-            stats: OdeStatistics::new(),
-            opts,
-            cache,
+        integrator
+            .func
+            .dudt(du.view_mut(), integrator.u.view(), integrator.t);
+
+        DormandPrince5Cache {
+            n_stiff: 0,
+            n_nonstiff: 0,
+            reject: false,
+            last: false,
+            facold: 0.0, // previous ratio of dtnew/dt
+            dtlamb: 0.0,
+            k2: Array1::<f64>::zeros(n),
+            k3: Array1::<f64>::zeros(n),
+            k4: Array1::<f64>::zeros(n),
+            k5: Array1::<f64>::zeros(n),
+            k6: Array1::<f64>::zeros(n),
+            rcont1: Array1::<f64>::zeros(n),
+            rcont2: Array1::<f64>::zeros(n),
+            rcont3: Array1::<f64>::zeros(n),
+            rcont4: Array1::<f64>::zeros(n),
+            rcont5: Array1::<f64>::zeros(n),
+            unew: Array1::<f64>::zeros(n),
+            du,
+            dunew: Array1::<f64>::zeros(n),
+            uerr: Array1::<f64>::zeros(n),
+            ustiff: Array1::<f64>::zeros(n),
         }
     }
     /// Step the integrator using the DormandPrince5 algorithm.

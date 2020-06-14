@@ -6,14 +6,16 @@
 //! - and advance the integrator to the next state (`next`).
 
 use super::function::OdeFunction;
-use super::integrator::OdeIntegrator;
-use super::problem::OdeProblem;
+use super::integrator::{OdeIntegrator, OdeIntegratorBuilder};
+use super::options::OdeIntegratorOpts;
 
 pub trait OdeAlgorithm {
     /// The `Cache` type is the cache struct associated with the algorithm.
     type Cache;
-    /// Construct an integrator.
-    fn init<T: OdeFunction>(prob: OdeProblem<T>) -> OdeIntegrator<T, Self>
+    /// Return a options struct with the default options for the algorithm.
+    fn default_opts() -> OdeIntegratorOpts;
+    /// Return an initialized cache
+    fn new_cache<T: OdeFunction>(integrator: &mut OdeIntegratorBuilder<T, Self>) -> Self::Cache
     where
         Self: Sized;
     /// Advance the integrator to the next state.

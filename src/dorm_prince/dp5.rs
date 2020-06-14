@@ -30,13 +30,13 @@ mod test {
             .build()
             .unwrap();
 
-        let mut integrator = DormandPrince5::init(prob);
+        let mut integrator = OdeIntegratorBuilder::default(prob, DormandPrince5).build();
 
         while let Some(_i) = integrator.step() {
             let dx = integrator.u[0] - integrator.t.sin();
             let dy = integrator.u[1] - integrator.t.cos();
-            assert!(dx.abs() < integrator.opts.reltol * integrator.t.sin().abs() * 10.0);
-            assert!(dy.abs() < integrator.opts.reltol * integrator.t.cos().abs() * 10.0);
+            assert!(dx.abs() <= integrator.opts.reltol * integrator.t.sin().abs() * 10.0);
+            assert!(dy.abs() <= integrator.opts.reltol * integrator.t.cos().abs() * 10.0);
         }
     }
 }

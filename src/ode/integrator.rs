@@ -15,7 +15,7 @@
 //! let tspan = (0.0, 1.0);
 //! let prob = OdeProblemBuilder::default(dudt, uinit, tspan).build().unwrap();
 //!
-//! let mut integrator = DormandPrince5::init(&prob);
+//! let mut integrator = OdeProblemBuilder::default(prob, DormandPrince5).build();
 //! // Step the integrator (returns solution if done, else None)
 //! integrator.step();
 //! // Integrate
@@ -25,6 +25,7 @@
 use super::algorithm::OdeAlgorithm;
 use super::function::OdeFunction;
 use super::options::OdeIntegratorOpts;
+use super::problem::OdeProblem;
 use super::solution::OdeSolution;
 use super::statistics::OdeStatistics;
 use ndarray::prelude::*;
@@ -79,5 +80,142 @@ impl<T: OdeFunction, Alg: OdeAlgorithm> OdeIntegrator<T, Alg> {
     /// Solve the ODE
     pub fn solve(&mut self) {
         while let Some(_i) = self.step() {}
+    }
+}
+
+/// Light-weight struct used to keep track of the state of the ODE throughout
+/// integration.
+pub struct OdeIntegratorBuilder<T: OdeFunction, Alg: OdeAlgorithm> {
+    /// Function structure representing the RHS of the ODE.
+    pub func: T,
+    /// Mass matrix for DAE.
+    pub mass_matrix: Option<Array2<f64>>,
+    /// Current solution vector
+    pub u: Array1<f64>,
+    /// Current time
+    pub t: f64,
+    /// Current step size
+    pub dt: f64,
+    /// Direction of integration.
+    pub tdir: f64,
+    /// Final time value
+    pub tfinal: f64,
+    /// Options
+    pub opts: OdeIntegratorOpts,
+    /// Algorithm
+    pub alg: Alg,
+}
+
+impl<T: OdeFunction, Alg: OdeAlgorithm> OdeIntegratorBuilder<T, Alg> {
+    pub fn default(prob: OdeProblem<T>, alg: Alg) -> OdeIntegratorBuilder<T, Alg> {
+        let mut opts = Alg::default_opts();
+        opts.dtmax = prob.tspan.1 - prob.tspan.0;
+        OdeIntegratorBuilder::<T, Alg> {
+            func: prob.func,
+            mass_matrix: None,
+            u: prob.uinit.clone(),
+            t: prob.tspan.0,
+            dt: opts.dtstart,
+            tdir: 1f64.copysign(prob.tspan.1 - prob.tspan.0),
+            tfinal: prob.tspan.1,
+            opts,
+            alg,
+        }
+    }
+    pub fn reltol(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.reltol = val;
+        self
+    }
+    pub fn abstol(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.abstol = val;
+        self
+    }
+    pub fn dense(mut self, val: bool) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.dense = val;
+        self
+    }
+    pub fn dtstart(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.dtstart = val;
+        self
+    }
+    pub fn dtmax(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.dtmax = val;
+        self
+    }
+    pub fn max_steps(mut self, val: usize) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.max_steps = val;
+        self
+    }
+    pub fn max_newt_iter(mut self, val: usize) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.max_newt_iter = val;
+        self
+    }
+    pub fn max_stiff(mut self, val: usize) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.max_stiff = val;
+        self
+    }
+    pub fn modern_pred(mut self, val: bool) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.modern_pred = val;
+        self
+    }
+    pub fn safe(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.safe = val;
+        self
+    }
+    pub fn facr(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.facr = val;
+        self
+    }
+    pub fn facl(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.facl = val;
+        self
+    }
+    pub fn quot1(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.quot1 = val;
+        self
+    }
+    pub fn quot2(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.quot2 = val;
+        self
+    }
+    pub fn beta(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.beta = val;
+        self
+    }
+    pub fn fnewt(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.fnewt = val;
+        self
+    }
+    pub fn use_ext_col(mut self, val: bool) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.use_ext_col = val;
+        self
+    }
+    pub fn hess(mut self, val: bool) -> OdeIntegratorBuilder<T, Alg> {
+        self.opts.hess = val;
+        self
+    }
+    pub fn build(mut self) -> OdeIntegrator<T, Alg> {
+        let cache = Alg::new_cache(&mut self);
+
+        let mut sol = OdeSolution::new();
+        sol.ts.push(self.t);
+        sol.us.push(self.u.clone());
+
+        OdeIntegrator {
+            func: self.func,
+            mass_matrix: self.mass_matrix,
+            u: self.u.clone(),
+            t: self.t,
+            dt: self.dt,
+            uprev: self.u,
+            tprev: self.t,
+            dtprev: self.dt,
+            tdir: self.tdir,
+            tfinal: self.tfinal,
+            opts: self.opts,
+            stats: OdeStatistics::new(),
+            sol,
+            cache,
+        }
     }
 }
