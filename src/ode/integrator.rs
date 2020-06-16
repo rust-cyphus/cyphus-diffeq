@@ -35,8 +35,6 @@ use ndarray::prelude::*;
 pub struct OdeIntegrator<T: OdeFunction, Alg: OdeAlgorithm> {
     /// Function structure representing the RHS of the ODE.
     pub func: T,
-    /// Mass matrix for DAE.
-    pub mass_matrix: Option<Array2<f64>>,
     /// Current solution vector
     pub u: Array1<f64>,
     /// Current time
@@ -67,12 +65,9 @@ impl<T: OdeFunction, Alg: OdeAlgorithm> OdeIntegrator<T, Alg> {
     /// Step the ODE to the next state. Returns solution if finished and
     /// None otherwise.
     pub fn step(&mut self) -> Option<usize> {
+        Alg::step(self);
         if self.sol.retcode == super::code::OdeRetCode::Continue {
-            if !Alg::step(self) {
-                Some(self.stats.steps)
-            } else {
-                None
-            }
+            Some(self.stats.steps)
         } else {
             None
         }
@@ -83,13 +78,65 @@ impl<T: OdeFunction, Alg: OdeAlgorithm> OdeIntegrator<T, Alg> {
     }
 }
 
+// Consuming iterator
+
+pub struct OdeIntegratorIterator<T: OdeFunction, Alg: OdeAlgorithm> {
+    pub integrator: OdeIntegrator<T, Alg>,
+}
+
+impl<T: OdeFunction, Alg: OdeAlgorithm> IntoIterator for OdeIntegrator<T, Alg> {
+    type Item = (f64, Array1<f64>);
+    type IntoIter = OdeIntegratorIterator<T, Alg>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        OdeIntegratorIterator { integrator: self }
+    }
+}
+
+impl<T: OdeFunction, Alg: OdeAlgorithm> Iterator for OdeIntegratorIterator<T, Alg> {
+    type Item = (f64, Array1<f64>);
+
+    fn next(&mut self) -> Option<(f64, Array1<f64>)> {
+        let res = self.integrator.step();
+        match res {
+            Some(_i) => Some((self.integrator.t, self.integrator.u.clone())),
+            None => None,
+        }
+    }
+}
+
+pub struct OdeIntegratorMutIterator<'a, T: OdeFunction, Alg: OdeAlgorithm> {
+    pub integrator: &'a mut OdeIntegrator<T, Alg>,
+}
+
+impl<'a, T: OdeFunction, Alg: OdeAlgorithm> IntoIterator for &'a mut OdeIntegrator<T, Alg> {
+    type Item = (f64, Array1<f64>);
+    type IntoIter = OdeIntegratorMutIterator<'a, T, Alg>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        OdeIntegratorMutIterator { integrator: self }
+    }
+}
+
+impl<'a, T: OdeFunction, Alg: OdeAlgorithm> Iterator for OdeIntegratorMutIterator<'a, T, Alg> {
+    type Item = (f64, Array1<f64>);
+
+    fn next(&mut self) -> Option<(f64, Array1<f64>)> {
+        let res = (*self).integrator.step();
+        match res {
+            Some(_i) => Some((self.integrator.t, self.integrator.u.clone())),
+            None => None,
+        }
+    }
+}
+
+// Non-consuming iterator
+
 /// Light-weight struct used to keep track of the state of the ODE throughout
 /// integration.
 pub struct OdeIntegratorBuilder<T: OdeFunction, Alg: OdeAlgorithm> {
     /// Function structure representing the RHS of the ODE.
     pub func: T,
-    /// Mass matrix for DAE.
-    pub mass_matrix: Option<Array2<f64>>,
     /// Current solution vector
     pub u: Array1<f64>,
     /// Current time
@@ -110,9 +157,9 @@ impl<T: OdeFunction, Alg: OdeAlgorithm> OdeIntegratorBuilder<T, Alg> {
     pub fn default(prob: OdeProblem<T>, alg: Alg) -> OdeIntegratorBuilder<T, Alg> {
         let mut opts = Alg::default_opts();
         opts.dtmax = prob.tspan.1 - prob.tspan.0;
+
         OdeIntegratorBuilder::<T, Alg> {
             func: prob.func,
-            mass_matrix: None,
             u: prob.uinit.clone(),
             t: prob.tspan.0,
             dt: opts.dtstart,
@@ -203,7 +250,6 @@ impl<T: OdeFunction, Alg: OdeAlgorithm> OdeIntegratorBuilder<T, Alg> {
 
         OdeIntegrator {
             func: self.func,
-            mass_matrix: self.mass_matrix,
             u: self.u.clone(),
             t: self.t,
             dt: self.dt,
