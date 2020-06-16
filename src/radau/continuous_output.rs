@@ -1,14 +1,12 @@
-use super::alg::Radau5;
-use super::cache::Radau5Cache;
-use crate::ode_integrator::OdeIntegrator;
+use super::Radau5;
+use crate::ode::{OdeFunction, OdeIntegrator};
 use ndarray::prelude::*;
 
 impl Radau5 {
-    pub(crate) fn dense_output(
+    pub(crate) fn dense_output<T: OdeFunction>(
         &self,
         t: f64,
-        integrator: &mut OdeIntegrator,
-        cache: &mut Radau5Cache,
+        integrator: &mut OdeIntegrator<T, Radau5>,
     ) -> Array1<f64> {
         let sq6 = 6f64.sqrt();
         let c1 = (4.0 - sq6) / 10.0;
@@ -21,9 +19,9 @@ impl Radau5 {
 
         let mut res: Array1<f64> = Array1::<f64>::zeros(n);
 
-        res.assign(&((s - c1m1) * &cache.cont.slice(s![(3 * n)..])));
-        res = (s - c2m1) * (res + s * &cache.cont.slice(s![(2 * n)..(3 * n)]));
-        res = s * (res + &cache.cont.slice(s![n..2 * n]));
-        res + &cache.cont.slice(s![0..n])
+        res.assign(&((s - c1m1) * &integrator.cache.cont.slice(s![(3 * n)..])));
+        res = (s - c2m1) * (res + s * &integrator.cache.cont.slice(s![(2 * n)..(3 * n)]));
+        res = s * (res + &integrator.cache.cont.slice(s![n..2 * n]));
+        res + &integrator.cache.cont.slice(s![0..n])
     }
 }

@@ -1,428 +1,81 @@
-use super::alg::Radau5;
-use super::cache::Radau5Cache;
+use super::Radau5;
 use crate::linalg::dec::*;
+use crate::ode::*;
+use ndarray::prelude::*;
 
 impl Radau5 {
     /// Perform a decomposition on the real matrices used for solving ODE using
     /// Radau5
-    pub(crate) fn decomp_real(&self, cache: &mut Radau5Cache) -> usize {
-        let n = cache.e1.nrows();
-        let nm1 = n - cache.m1;
-        let mut ier = 0;
+    pub(crate) fn decomp_real<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>) -> usize {
+        // E1 = fac1 * I - dfdu
+        integrator.cache.e1.assign(
+            &(integrator.cache.fac1 * Array::eye(integrator.cache.e1.shape()[0])
+                - &integrator.cache.dfdu),
+        );
 
-        match cache.prob_type {
-            1 => {
-                for j in 0..n {
-                    for i in 0..n {
-                        cache.e1[[i, j]] = -cache.dfdu[[i, j]];
-                    }
-                    cache.e1[[j, j]] += cache.fac1;
-                }
-                ier = dec(n, cache.e1.view_mut(), cache.ip1.view_mut());
-            }
-            2 => {
-                for j in 0..n {
-                    for i in 0..cache.mbjac {
-                        cache.e1[[i + cache.mle, j]] = -cache.dfdu[[i, j]];
-                    }
-                    cache.e1[[cache.mdiag, j]] += cache.fac1;
-                }
-                ier = decb(
-                    n,
-                    cache.e1.view_mut(),
-                    cache.mle,
-                    cache.mue,
-                    cache.ip1.view_mut(),
-                );
-            }
-            3 => {
-                for j in 0..n {
-                    for i in 0..n {
-                        cache.e1[[i, j]] = -cache.dfdu[[i, j]];
-                    }
-                    for i in 0.max(j - cache.mumas)..n.min(j + cache.mlmas + 1) {
-                        cache.e1[[i, j]] +=
-                            cache.fac1 * cache.mass_matrix[[i - j + cache.mbdiag - 1, j]];
-                    }
-                }
-                ier = dec(n, cache.e1.view_mut(), cache.ip1.view_mut());
-            }
-            4 => {
-                for j in 0..n {
-                    for i in 0..cache.mbjac {
-                        cache.e1[[i + cache.mle, j]] = -cache.dfdu[[i, j]];
-                    }
-                    for i in 0..cache.mbb {
-                        cache.e1[[i + cache.mdiff, j]] += cache.fac1 * cache.mass_matrix[[i, j]];
-                    }
-                }
-                ier = decb(
-                    n,
-                    cache.e1.view_mut(),
-                    cache.mle,
-                    cache.mue,
-                    cache.ip1.view_mut(),
-                );
-            }
-            5 => {
-                // mass is a full matrix, Jacobian a full matrix
-                for j in 0..n {
-                    for i in 0..n {
-                        cache.e1[[i, j]] =
-                            cache.mass_matrix[[i, j]] * cache.fac1 - cache.dfdu[[i, j]];
-                    }
-                }
-                ier = dec(n, cache.e1.view_mut(), cache.ip1.view_mut());
-            }
-            7 => {
-                // mass = identity, Jacobian a full matrix, Hessenberg-option
-                if cache.calhes {
-                    elmhes(n, 0, n, cache.dfdu.view_mut(), cache.iphes.view_mut());
-                }
-                cache.calhes = false;
-                for j in 0..(n - 1) {
-                    cache.e1[[j + 1, j]] = -cache.dfdu[[j + 1, j]];
-                }
-                for j in 0..n {
-                    for i in 0..(j + 1) {
-                        cache.e1[[i, j]] = -cache.dfdu[[i, j]];
-                    }
-                    cache.e1[[j, j]] += cache.fac1;
-                }
-                ier = dech(n, cache.e1.view_mut(), 1, cache.ip1.view_mut());
-            }
-            11 => {
-                for j in 0..nm1 {
-                    for i in 0..nm1 {
-                        cache.e1[[i, j]] = -cache.dfdu[[i, j + cache.m1]];
-                    }
-                    cache.e1[[j, j]] += cache.fac1;
-                }
-            }
-            12 => {
-                for j in 0..nm1 {
-                    for i in 0..cache.mbjac {
-                        cache.e1[[i + cache.mle, j]] = -cache.dfdu[[i, j + cache.m1]];
-                    }
-                    cache.e1[[cache.mdiag, j]] += cache.fac1;
-                }
-            }
-            13 => {
-                for j in 0..nm1 {
-                    for i in 0..nm1 {
-                        cache.e1[[i, j]] = -cache.dfdu[[i, j + cache.m1]];
-                    }
-                    for i in 0.max(j - cache.mumas)..n.min(j + cache.mlmas + 1) {
-                        cache.e1[[i, j]] +=
-                            cache.fac1 * cache.mass_matrix[[i - j + cache.mbdiag - 1, j]];
-                    }
-                }
-            }
-            14 => {
-                for j in 0..nm1 {
-                    for i in 0..cache.mbjac {
-                        cache.e1[[i + cache.mle, j]] = -cache.dfdu[[i, j + cache.m1]];
-                    }
-                    for i in 0..cache.mbb {
-                        cache.e1[[i + cache.mdiff, j]] += cache.fac1 * cache.mass_matrix[[i, j]];
-                    }
-                }
-            }
-            15 => {
-                for j in 0..nm1 {
-                    for i in 0..nm1 {
-                        cache.e1[[i, j]] =
-                            cache.mass_matrix[[i, j]] * cache.fac1 - cache.dfdu[[i, j + cache.m1]];
-                    }
-                }
-            }
-            _ => {}
-        }
-
-        match cache.prob_type {
-            11 | 13 | 15 => {
-                let mm = cache.m1 / cache.m2;
-                for j in 0..cache.m2 {
-                    for i in 0..nm1 {
-                        let mut sum = 0.0;
-                        for k in 0..mm {
-                            sum = (sum + cache.dfdu[[i, j + k * cache.m2]]) / cache.fac1;
-                        }
-                        cache.e1[[i, j]] -= sum;
-                    }
-                }
-                ier = dec(nm1, cache.e1.view_mut(), cache.ip1.view_mut());
-            }
-            12 | 14 => {
-                let mm = cache.m1 / cache.m2;
-                for j in 0..cache.m2 {
-                    for i in 0..cache.mbjac {
-                        let mut sum = 0.0;
-                        for k in 0..mm {
-                            sum = (sum + cache.dfdu[[i, j + k * cache.m2]]) / cache.fac1;
-                        }
-                        cache.e1[[i + cache.mle, j]] -= sum;
-                    }
-                }
-                ier = decb(
-                    nm1,
-                    cache.e1.view_mut(),
-                    cache.mle,
-                    cache.mue,
-                    cache.ip1.view_mut(),
-                );
-            }
-            _ => {}
-        }
-
-        ier
+        dec(
+            integrator.cache.e1.nrows(),
+            integrator.cache.e1.view_mut(),
+            integrator.cache.ip1.view_mut(),
+        )
     }
 
     /// Perform a decomposition on the complex matrices used for solving ODE using
     /// Radau5
-    pub(crate) fn decomp_complex(&self, cache: &mut Radau5Cache) -> usize {
-        let n = cache.e1.nrows();
-        let nm1 = n - cache.m1;
-        let mut ier = 0;
+    pub(crate) fn decomp_complex<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>) -> usize {
+        let n = integrator.cache.e2r.nrows();
+        let iden = Array::eye(n);
 
-        match cache.prob_type {
-            1 => {
-                // mass = identity, Jacobian a full matrix
-                for j in 0..n {
-                    for i in 0..n {
-                        cache.e2r[[i, j]] = -cache.dfdu[[i, j]];
-                        cache.e2i[[i, j]] = 0.0;
-                    }
-                    cache.e2r[[j, j]] += cache.alphn;
-                    cache.e2i[[j, j]] = cache.betan;
-                }
-                ier = decc(
-                    n,
-                    cache.e2r.view_mut(),
-                    cache.e2i.view_mut(),
-                    cache.ip2.view_mut(),
-                );
+        // E2r = alpha * I - dfdu
+        integrator
+            .cache
+            .e2r
+            .assign(&(integrator.cache.alphn * &iden - &integrator.cache.dfdu));
+        // E2i = beta * I
+        integrator
+            .cache
+            .e2i
+            .assign(&(integrator.cache.betan * &iden));
+        decc(
+            n,
+            integrator.cache.e2r.view_mut(),
+            integrator.cache.e2i.view_mut(),
+            integrator.cache.ip2.view_mut(),
+        )
+    }
+    /// Perform the needed decompositions for the Radau5 algorithm. Returns
+    /// true if the decompositions were successful. False otherwise.
+    pub(super) fn perform_decompositions<T: OdeFunction>(
+        integrator: &mut OdeIntegrator<T, Self>,
+    ) -> bool {
+        // compute the matrices e1 and e2 and their decompositions
+        integrator.cache.fac1 = Radau5::U1 / integrator.dt;
+        integrator.cache.alphn = Radau5::ALPHA / integrator.dt;
+        integrator.cache.betan = Radau5::BETA / integrator.dt;
+
+        if Self::decomp_real(integrator) == 0 {
+            if Self::decomp_complex(integrator) == 0 {
+                integrator.stats.decompositions += 1;
+                return true;
             }
-            2 => {
-                // mass = identiy, Jacobian a banded matrix
-                for j in 0..n {
-                    for i in 0..cache.mbjac {
-                        cache.e2r[[i + cache.mle, j]] = -cache.dfdu[[i, j]];
-                        cache.e2i[[i + cache.mle, j]] = 0.0;
-                    }
-                    cache.e2r[[cache.mdiag, j]] += cache.alphn;
-                    cache.e2i[[cache.mdiag, j]] = cache.betan;
-                }
-                ier = decbc(
-                    n,
-                    cache.e2r.view_mut(),
-                    cache.e2i.view_mut(),
-                    cache.mle,
-                    cache.mue,
-                    cache.ip2.view_mut(),
-                );
-            }
-            3 => {
-                // mass is a banded matrix, Jacobian a full matrix
-                for j in 0..n {
-                    for i in 0..n {
-                        cache.e2r[[i, j]] = -cache.dfdu[[i, j]];
-                        cache.e2i[[i, j]] = 0.0;
-                    }
-                }
-                for j in 0..n {
-                    for i in 0.max(j - cache.mumas)..n.min(j + cache.mlmas + 1) {
-                        let bb = cache.mass_matrix[[i - j + cache.mbdiag - 1, j]];
-                        cache.e2r[[i, j]] += cache.alphn * bb;
-                        cache.e2i[[i, j]] = cache.betan * bb;
-                    }
-                }
-                ier = decc(
-                    n,
-                    cache.e2r.view_mut(),
-                    cache.e2i.view_mut(),
-                    cache.ip2.view_mut(),
-                );
-            }
-            4 => {
-                // mass is a banded matrix, Jacobian a banded matrix
-                for j in 0..n {
-                    for i in 0..cache.mbjac {
-                        cache.e2r[[i + cache.mle, j]] = -cache.dfdu[[i, j]];
-                        cache.e2i[[i + cache.mle, j]] = 0.0;
-                    }
-                    for i in 0.max(cache.mumas - j)..cache.mbb.min(cache.mumas - j + n) {
-                        let bb = cache.mass_matrix[[i, j]];
-                        cache.e2r[[i + cache.mdiff, j]] += cache.alphn * bb;
-                        cache.e2i[[i + cache.mdiff, j]] = cache.betan * bb;
-                    }
-                }
-                ier = decbc(
-                    n,
-                    cache.e2r.view_mut(),
-                    cache.e2i.view_mut(),
-                    cache.mle,
-                    cache.mue,
-                    cache.ip2.view_mut(),
-                );
-            }
-            5 => {
-                // mass is a full matrix, Jacobian a full matrix
-                for j in 0..n {
-                    for i in 0..n {
-                        let bb = cache.mass_matrix[[i, j]];
-                        cache.e2r[[i, j]] = cache.alphn * bb - cache.dfdu[[i, j]];
-                        cache.e2i[[i, j]] = cache.betan * bb;
-                    }
-                }
-                ier = decc(
-                    n,
-                    cache.e2r.view_mut(),
-                    cache.e2i.view_mut(),
-                    cache.ip2.view_mut(),
-                );
-            }
-            7 => {
-                // mass = identity, Jacobian a full matrix, Hessenberg-option
-                for j in 0..(n - 1) {
-                    cache.e2r[[j + 1, j]] = -cache.dfdu[[j + 1, j]];
-                    cache.e2i[[j + 1, j]] = 0.0;
-                }
-                for j in 0..n {
-                    for i in 0..(j + 1) {
-                        cache.e2i[[i, j]] = 0.0;
-                        cache.e2r[[i, j]] = -cache.dfdu[[i, j]];
-                    }
-                    cache.e2r[[j, j]] += cache.alphn;
-                    cache.e2i[[j, j]] = cache.betan;
-                }
-                ier = dechc(
-                    n,
-                    cache.e2r.view_mut(),
-                    cache.e2i.view_mut(),
-                    1,
-                    cache.ip2.view_mut(),
-                );
-            }
-            11 => {
-                // mass = identity, Jacobian a full matrix, second order
-                for j in 0..nm1 {
-                    for i in 0..nm1 {
-                        cache.e2r[[i, j]] = -cache.dfdu[[i, j + cache.m1]];
-                        cache.e2i[[i, j]] = 0.0;
-                    }
-                    cache.e2r[[j, j]] += cache.alphn;
-                    cache.e2i[[j, j]] = cache.betan;
-                }
-            }
-            12 => {
-                // mass = identity, Jacobian a banded matrix, second order
-                for j in 0..nm1 {
-                    for i in 0..cache.mbjac {
-                        cache.e2r[[i + cache.mle, j]] = -cache.dfdu[[i, j + cache.m1]];
-                        cache.e2i[[i + cache.mle, j]] = 0.0;
-                    }
-                    cache.e2r[[cache.mdiag, j]] += cache.alphn;
-                    cache.e2i[[cache.mdiag, j]] += cache.betan;
-                }
-            }
-            13 => {
-                // mass is a banded matrix, Jacobian a full matrix, second order
-                for j in 0..nm1 {
-                    for i in 0..nm1 {
-                        cache.e2r[[i, j]] = -cache.dfdu[[i, j + cache.m1]];
-                        cache.e2i[[i, j]] = 0.0;
-                    }
-                    for i in 0.max(j - cache.mumas)..nm1.min(j + cache.mlmas + 1) {
-                        let ffma = cache.mass_matrix[[i - j + cache.mbdiag - 1, j]];
-                        cache.e2r[[j, j]] += cache.alphn * ffma;
-                        cache.e2i[[j, j]] += cache.betan * ffma;
-                    }
-                }
-            }
-            14 => {
-                // mass is a banded matrix, Jacobian a banded matrix, second order
-                for j in 0..nm1 {
-                    for i in 0..cache.mbjac {
-                        cache.e2r[[i + cache.mle, j]] = -cache.dfdu[[i, j + cache.m1]];
-                        cache.e2i[[i + cache.mle, j]] = 0.0;
-                    }
-                    for i in 0..cache.mbb {
-                        let ffma = cache.mass_matrix[[i, j]];
-                        cache.e2r[[i + cache.mdiff, j]] += cache.alphn * ffma;
-                        cache.e2i[[i + cache.mdiff, j]] += cache.betan * ffma;
-                    }
-                }
-            }
-            15 => {
-                // mass is a full matrix, Jacobian a full matrix, second order
-                for j in 0..nm1 {
-                    for i in 0..nm1 {
-                        cache.e2r[[i, j]] =
-                            cache.alphn * cache.mass_matrix[[i, j]] - cache.dfdu[[i, j + cache.m1]];
-                        cache.e2i[[i, j]] = cache.betan * cache.mass_matrix[[i, j]];
-                    }
-                }
-            }
-            _ => {}
         }
 
-        match cache.prob_type {
-            11 | 13 | 15 => {
-                let mm = cache.m1 / cache.m2;
-                let abno = cache.alphn * cache.alphn + cache.betan * cache.betan;
-                let alp = cache.alphn / abno;
-                let bet = cache.betan / abno;
-                for j in 0..cache.m2 {
-                    for i in 0..nm1 {
-                        let mut sumr = 0.0;
-                        let mut sumi = 0.0;
-                        for k in 0..mm {
-                            let sums = sumr + cache.dfdu[[i, j + k * cache.m2]];
-                            sumr = sums * alp + sumi * bet;
-                            sumi = sumi * alp - sums * bet;
-                        }
-                        cache.e2r[[i, j]] -= sumr;
-                        cache.e2i[[i, j]] -= sumi;
-                    }
-                }
-                ier = decc(
-                    nm1,
-                    cache.e2r.view_mut(),
-                    cache.e2i.view_mut(),
-                    cache.ip2.view_mut(),
-                );
-            }
-            12 | 14 => {
-                let mm = cache.m1 / cache.m2;
-                let abno = cache.alphn * cache.alphn + cache.betan * cache.betan;
-                let alp = cache.alphn / abno;
-                let bet = cache.betan / abno;
-                for j in 0..cache.m2 {
-                    for i in 0..cache.mbjac {
-                        let mut sumr = 0.0;
-                        let mut sumi = 0.0;
-                        for k in 0..mm {
-                            let sums = sumr + cache.dfdu[[i, j + k * cache.m2]];
-                            sumr = sums * alp + sumi * bet;
-                            sumi = sumi * alp - sums * bet;
-                        }
-                        cache.e2r[[i + cache.mle, j]] -= sumr;
-                        cache.e2i[[i + cache.mle, j]] -= sumi;
-                    }
-                }
-                ier = decbc(
-                    nm1,
-                    cache.e2r.view_mut(),
-                    cache.e2i.view_mut(),
-                    cache.mle,
-                    cache.mue,
-                    cache.ip2.view_mut(),
-                );
-            }
-            _ => {}
+        integrator.cache.nsing += 1;
+        if integrator.cache.nsing >= 5 {
+            integrator.sol.retcode = OdeRetCode::SingularMatrix;
+            return false;
         }
-
-        ier
+        integrator.dt *= 0.5;
+        integrator.cache.dtfac = 0.5;
+        integrator.cache.reject = true;
+        integrator.cache.last = false;
+        if !integrator.cache.caljac {
+            integrator.func.dfdu(
+                integrator.cache.dfdu.view_mut(),
+                integrator.u.view(),
+                integrator.t,
+            );
+        }
+        return false;
     }
 }
