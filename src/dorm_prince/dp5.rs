@@ -26,17 +26,16 @@ mod test {
         let uinit = array![0.0, 1.0];
         let tspan = (0.0, 2.0);
 
-        let prob = OdeProblemBuilder::default(HO, uinit.clone(), tspan)
-            .build()
-            .unwrap();
+        let prob = OdeProblem::new(HO, uinit.clone(), tspan);
+        let integrator = OdeIntegratorBuilder::default(prob, DormandPrince5).build();
+        let reltol = integrator.opts.reltol;
 
-        let mut integrator = OdeIntegratorBuilder::default(prob, DormandPrince5).build();
-
-        while let Some(_i) = integrator.step() {
-            let dx = integrator.u[0] - integrator.t.sin();
-            let dy = integrator.u[1] - integrator.t.cos();
-            assert!(dx.abs() <= integrator.opts.reltol * integrator.t.sin().abs() * 10.0);
-            assert!(dy.abs() <= integrator.opts.reltol * integrator.t.cos().abs() * 10.0);
+        for (t, u) in integrator.into_iter() {
+            println!("{}, {}", t, u);
+            let dx = u[0] - t.sin();
+            let dy = u[1] - t.cos();
+            assert!(dx.abs() <= reltol * t.sin().abs() * 10.0);
+            assert!(dy.abs() <= reltol * t.cos().abs() * 10.0);
         }
     }
 }

@@ -7,26 +7,15 @@ use ndarray::prelude::*;
 impl OdeAlgorithm for DormandPrince5 {
     type Cache = super::cache::DormandPrince5Cache;
     fn default_opts() -> OdeIntegratorOpts {
-        OdeIntegratorOpts {
-            reltol: 1e-3,
-            abstol: 1e-6,
-            dense: false,
-            dtstart: 1e-6,
-            dtmax: f64::INFINITY,
-            max_steps: 100000,
-            beta: 0.04,
-            max_newt_iter: 0,
-            max_stiff: 1000,
-            modern_pred: false,
-            safe: 0.9,
-            facr: 10.0,
-            facl: 0.2,
-            quot1: 0.0,
-            quot2: 0.0,
-            fnewt: 0.0,
-            use_ext_col: false,
-            hess: false,
-        }
+        let mut opts = OdeIntegratorOpts::new();
+        opts.reltol = 1e-3;
+        opts.abstol = 1e-7;
+        opts.beta = 0.04;
+        opts.facr = 10.0;
+        opts.facl = 0.2;
+        opts.max_stiff = 1000;
+        opts.max_steps = 100000;
+        opts
     }
     fn new_cache<T: OdeFunction>(integrator: &mut OdeIntegratorBuilder<T, Self>) -> Self::Cache {
         let n = integrator.u.len();
@@ -62,7 +51,7 @@ impl OdeAlgorithm for DormandPrince5 {
     }
     /// Step the integrator using the DormandPrince5 algorithm.
     #[allow(dead_code)]
-    fn step<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>) -> bool
+    fn step<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>)
     where
         Self: Sized,
     {
@@ -79,7 +68,6 @@ impl OdeAlgorithm for DormandPrince5 {
             }
             if integrator.dt.abs() <= integrator.t.abs() * f64::EPSILON {
                 integrator.sol.retcode = OdeRetCode::DtLessThanMin;
-                return true;
             }
         }
 
@@ -89,13 +77,9 @@ impl OdeAlgorithm for DormandPrince5 {
 
         if integrator.stats.steps > integrator.opts.max_steps {
             integrator.sol.retcode = OdeRetCode::MaxIters;
-            return true;
         }
         if integrator.cache.last {
             integrator.sol.retcode = OdeRetCode::Success;
-            return true;
         }
-
-        false
     }
 }
