@@ -40,4 +40,32 @@ pub struct OdeIntegratorOpts {
     pub use_ext_col: bool,
     /// If true, the Jacobian will be converted into Hessenberg form.
     pub hess: bool,
+    /// Decides whether the Jacobian should be recomputed.
+    pub theta: f64,
+}
+
+impl OdeIntegratorOpts {
+    pub fn new() -> OdeIntegratorOpts {
+        OdeIntegratorOpts {
+            reltol: 1e-3,
+            abstol: 1e-7,
+            dense: false,
+            dtstart: 1e-6,
+            dtmax: f64::INFINITY,
+            max_steps: 100000,
+            max_newt_iter: 7,
+            max_stiff: 1000,
+            modern_pred: true,
+            safe: 0.9,
+            facr: 0.0,
+            facl: 0.0,
+            quot1: 0.0,
+            quot2: 0.0,
+            beta: 0.0,
+            fnewt: 0.0,
+            use_ext_col: true,
+            hess: false,
+            theta: 0.0,
+        }
+    }
 }
