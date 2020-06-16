@@ -19,7 +19,7 @@ pub trait OdeAlgorithm {
     where
         Self: Sized;
     /// Advance the integrator to the next state.
-    fn step<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>) -> bool
+    fn step<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>)
     where
         Self: Sized;
 }
