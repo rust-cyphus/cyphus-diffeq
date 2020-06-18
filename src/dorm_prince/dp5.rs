@@ -16,18 +16,16 @@ mod test {
 
     #[test]
     fn test_ho() {
-        struct HO;
-        impl OdeFunction for HO {
-            fn dudt(&mut self, mut du: ArrayViewMut1<f64>, u: ArrayView1<f64>, _t: f64) {
-                du[0] = u[1];
-                du[1] = -u[0];
-            }
-        }
+        let dudt = |mut du: ArrayViewMut1<f64>, u: ArrayView1<f64>, _t: f64, _p: &()| {
+            du[0] = u[1];
+            du[1] = -u[0];
+        };
         let uinit = array![0.0, 1.0];
         let tspan = (0.0, 2.0);
 
-        let prob = OdeProblem::new(HO, uinit.clone(), tspan);
-        let integrator = OdeIntegratorBuilder::default(prob, DormandPrince5).build();
+        //let prob = OdeProblem::new(HO, uinit.clone(), tspan);
+        let integrator =
+            OdeIntegratorBuilder::default(&dudt, uinit.clone(), tspan, DormandPrince5, ()).build();
         let reltol = integrator.opts.reltol;
 
         for (t, u) in integrator.into_iter() {

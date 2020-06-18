@@ -1,11 +1,11 @@
 use super::DormandPrince5;
-use crate::ode::{OdeFunction, OdeIntegrator};
+use crate::ode::OdeIntegrator;
 use ndarray::prelude::*;
 
 impl DormandPrince5 {
     /// Prepare the continuous output vector for dense output.
     #[allow(dead_code)]
-    pub(super) fn prepare_dense<T: OdeFunction>(integrator: &mut OdeIntegrator<T, DormandPrince5>) {
+    pub(super) fn prepare_dense<Params>(integrator: &mut OdeIntegrator<Params, DormandPrince5>) {
         integrator.cache.rcont1.assign(&integrator.u);
         integrator
             .cache
@@ -32,8 +32,8 @@ impl DormandPrince5 {
     }
     /// Compute the dense output for the solution vector.
     #[allow(dead_code)]
-    pub(super) fn dense_output<T: OdeFunction>(
-        integrator: &mut OdeIntegrator<T, DormandPrince5>,
+    pub(super) fn dense_output<Params>(
+        integrator: &mut OdeIntegrator<Params, DormandPrince5>,
         t: f64,
         dt: f64,
     ) -> Array1<f64> {

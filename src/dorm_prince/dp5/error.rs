@@ -1,9 +1,9 @@
 use super::DormandPrince5;
-use crate::ode::{OdeFunction, OdeIntegrator};
+use crate::ode::OdeIntegrator;
 
 impl DormandPrince5 {
     #[allow(dead_code)]
-    pub(super) fn error<T: OdeFunction>(integrator: &OdeIntegrator<T, DormandPrince5>) -> f64 {
+    pub(super) fn error<Params>(integrator: &OdeIntegrator<Params, DormandPrince5>) -> f64 {
         let mut err = 0.0;
         let n = integrator.u.len();
         for i in 0..n {

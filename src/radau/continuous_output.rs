@@ -1,12 +1,13 @@
 use super::Radau5;
-use crate::ode::{OdeFunction, OdeIntegrator};
+use crate::ode::OdeIntegrator;
 use ndarray::prelude::*;
 
 impl Radau5 {
-    pub(crate) fn dense_output<T: OdeFunction>(
+    #[allow(dead_code)]
+    pub(crate) fn dense_output<Params>(
         &self,
         t: f64,
-        integrator: &mut OdeIntegrator<T, Radau5>,
+        integrator: &mut OdeIntegrator<Params, Radau5>,
     ) -> Array1<f64> {
         let sq6 = 6f64.sqrt();
         let c1 = (4.0 - sq6) / 10.0;

@@ -1,4 +1,5 @@
 pub mod dorm_prince;
+pub mod integrator;
 pub(crate) mod linalg;
 pub mod ode;
 pub mod prelude;

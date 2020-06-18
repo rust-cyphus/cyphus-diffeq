@@ -21,7 +21,7 @@ impl OdeAlgorithm for Radau5 {
         opts.modern_pred = true;
         opts
     }
-    fn new_cache<T: OdeFunction>(integrator: &mut OdeIntegratorBuilder<T, Self>) -> Self::Cache {
+    fn new_cache<Params>(integrator: &mut OdeIntegratorBuilder<Params, Self>) -> Self::Cache {
         let quot = integrator.opts.abstol / integrator.opts.reltol;
         integrator.opts.reltol = 0.1 * integrator.opts.reltol.powf(2.0 / 3.0);
         integrator.opts.abstol = integrator.opts.reltol * quot;
@@ -38,13 +38,21 @@ impl OdeAlgorithm for Radau5 {
         }
 
         // Initialize the cache
-        integrator
-            .func
-            .dudt(u0.view_mut(), integrator.u.view(), integrator.t);
+        (integrator.dudt)(
+            u0.view_mut(),
+            integrator.u.view(),
+            integrator.t,
+            &mut integrator.params,
+        );
 
-        integrator
-            .func
-            .dfdu(dfdu.view_mut(), integrator.u.view(), integrator.t);
+        jacobian_u(
+            integrator.dudt,
+            integrator.dfdu,
+            dfdu.view_mut(),
+            integrator.u.view(),
+            integrator.t,
+            &integrator.params,
+        );
 
         if integrator.opts.fnewt <= 0.0 {
             integrator.opts.fnewt = (10.0 * f64::EPSILON / integrator.opts.reltol)
@@ -89,7 +97,7 @@ impl OdeAlgorithm for Radau5 {
             dfdu,
         }
     }
-    fn step<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>) {
+    fn step<Params>(integrator: &mut OdeIntegrator<Params, Self>) {
         if integrator.t + integrator.dt * 1.0001 - integrator.tfinal * integrator.tdir >= 0.0 {
             integrator.dt = integrator.tfinal - integrator.t;
             integrator.cache.last = true;

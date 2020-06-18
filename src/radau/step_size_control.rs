@@ -2,7 +2,7 @@ use super::Radau5;
 use crate::ode::*;
 
 impl Radau5 {
-    pub(super) fn step_size_control<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>) {
+    pub(super) fn step_size_control<Params>(integrator: &mut OdeIntegrator<Params, Self>) {
         let n = integrator.u.len();
         integrator.cache.decompose = true;
 
@@ -75,10 +75,11 @@ impl Radau5 {
                 integrator.sol.retcode = OdeRetCode::Success;
                 return;
             }
-            integrator.func.dudt(
+            (integrator.dudt)(
                 integrator.cache.u0.view_mut(),
                 integrator.u.view(),
                 integrator.t,
+                &integrator.params,
             );
             integrator.stats.function_evals += 1;
 
@@ -107,10 +108,13 @@ impl Radau5 {
             }
             integrator.cache.dtfac = integrator.dt;
             if integrator.cache.theta > integrator.opts.theta {
-                integrator.func.dfdu(
+                jacobian_u(
+                    integrator.dudt,
+                    integrator.dfdu,
                     integrator.cache.dfdu.view_mut(),
                     integrator.u.view(),
                     integrator.t,
+                    &integrator.params,
                 );
             }
         } else {
@@ -128,10 +132,13 @@ impl Radau5 {
                 integrator.stats.rejects += 1;
             }
             if !integrator.cache.caljac {
-                integrator.func.dfdu(
+                jacobian_u(
+                    integrator.dudt,
+                    integrator.dfdu,
                     integrator.cache.dfdu.view_mut(),
                     integrator.u.view(),
                     integrator.t,
+                    &integrator.params,
                 );
             }
         }

@@ -2,7 +2,7 @@ use super::Radau5;
 use crate::ode::*;
 
 impl Radau5 {
-    pub(super) fn prepare_newton<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>) {
+    pub(super) fn prepare_newton<Params>(integrator: &mut OdeIntegrator<Params, Self>) {
         let n = integrator.u.len();
         //  starting values for Newton iteration
         if integrator.cache.first || !integrator.opts.use_ext_col {
@@ -50,7 +50,7 @@ impl Radau5 {
     }
     /// Solve the non-linear systems using a simplified newton iteration.
     /// Returns true if successful and false otherwise.
-    pub(super) fn newton<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>) -> bool {
+    pub(super) fn newton<Params>(integrator: &mut OdeIntegrator<Params, Self>) -> bool {
         let n = integrator.u.len();
 
         Self::prepare_newton(integrator);
@@ -68,10 +68,13 @@ impl Radau5 {
                 integrator.cache.reject = true;
                 integrator.cache.last = false;
                 if !integrator.cache.caljac {
-                    integrator.func.dfdu(
+                    jacobian_u(
+                        integrator.dudt,
+                        integrator.dfdu,
                         integrator.cache.dfdu.view_mut(),
                         integrator.u.view(),
                         integrator.t,
+                        &integrator.params,
                     );
                 }
                 return false;
@@ -80,28 +83,31 @@ impl Radau5 {
             for i in 0..n {
                 integrator.cache.cont[i] = integrator.u[i] + integrator.cache.z1[i];
             }
-            integrator.func.dudt(
+            (integrator.dudt)(
                 integrator.cache.z1.view_mut(),
                 integrator.cache.cont.view(),
                 integrator.t + Radau5::C1 * integrator.dt,
+                &integrator.params,
             );
 
             for i in 0..n {
                 integrator.cache.cont[i] = integrator.u[i] + integrator.cache.z2[i];
             }
-            integrator.func.dudt(
+            (integrator.dudt)(
                 integrator.cache.z2.view_mut(),
                 integrator.cache.cont.view(),
                 integrator.t + Radau5::C2 * integrator.dt,
+                &integrator.params,
             );
 
             for i in 0..n {
                 integrator.cache.cont[i] = integrator.u[i] + integrator.cache.z3[i];
             }
-            integrator.func.dudt(
+            (integrator.dudt)(
                 integrator.cache.z3.view_mut(),
                 integrator.cache.cont.view(),
                 integrator.t + integrator.dt,
+                &integrator.params,
             );
 
             integrator.stats.function_evals += 3;
@@ -161,10 +167,13 @@ impl Radau5 {
                         integrator.cache.reject = true;
                         integrator.cache.last = false;
                         if integrator.cache.caljac {
-                            integrator.func.dfdu(
+                            jacobian_u(
+                                integrator.dudt,
+                                integrator.dfdu,
                                 integrator.cache.dfdu.view_mut(),
                                 integrator.u.view(),
                                 integrator.t,
+                                &integrator.params,
                             );
                         }
                         return false;
@@ -175,10 +184,13 @@ impl Radau5 {
                     integrator.cache.reject = true;
                     integrator.cache.last = false;
                     if !integrator.cache.caljac {
-                        integrator.func.dfdu(
+                        jacobian_u(
+                            integrator.dudt,
+                            integrator.dfdu,
                             integrator.cache.dfdu.view_mut(),
                             integrator.u.view(),
                             integrator.t,
+                            &integrator.params,
                         );
                     }
                     return false;

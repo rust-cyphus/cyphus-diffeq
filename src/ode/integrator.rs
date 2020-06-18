@@ -23,18 +23,21 @@
 //! ```
 
 use super::algorithm::OdeAlgorithm;
-use super::function::OdeFunction;
 use super::options::OdeIntegratorOpts;
-use super::problem::OdeProblem;
 use super::solution::OdeSolution;
 use super::statistics::OdeStatistics;
 use ndarray::prelude::*;
 
-/// Light-weight struct used to keep track of the state of the ODE throughout
-/// integration.
-pub struct OdeIntegrator<T: OdeFunction, Alg: OdeAlgorithm> {
+/// Structure to hold all information needed to integrate an ODE.
+pub struct OdeIntegrator<'a, Params: 'a, Alg: OdeAlgorithm + 'a> {
     /// Function structure representing the RHS of the ODE.
-    pub func: T,
+    pub dudt: &'a dyn Fn(ArrayViewMut1<f64>, ArrayView1<f64>, f64, &Params),
+    /// Jacobian w.r.t. t of RHS of ODE
+    pub(crate) dfdt: Option<&'a dyn Fn(ArrayViewMut1<f64>, ArrayView1<f64>, f64, &Params)>,
+    /// Jacobian w.r.t. u of RHS of ODE
+    pub(crate) dfdu: Option<&'a dyn Fn(ArrayViewMut2<f64>, ArrayView1<f64>, f64, &Params)>,
+    /// Parameters of the ODE
+    pub params: Params,
     /// Current solution vector
     pub u: Array1<f64>,
     /// Current time
@@ -57,11 +60,12 @@ pub struct OdeIntegrator<T: OdeFunction, Alg: OdeAlgorithm> {
     pub stats: OdeStatistics,
     /// Solution object
     pub sol: OdeSolution,
+    pub alg: Alg,
     /// Cache associated with the algorithm
     pub(crate) cache: Alg::Cache,
 }
 
-impl<T: OdeFunction, Alg: OdeAlgorithm> OdeIntegrator<T, Alg> {
+impl<'a, Params, Alg: OdeAlgorithm> OdeIntegrator<'a, Params, Alg> {
     /// Step the ODE to the next state. Returns solution if finished and
     /// None otherwise.
     pub fn step(&mut self) -> Option<usize> {
@@ -73,27 +77,27 @@ impl<T: OdeFunction, Alg: OdeAlgorithm> OdeIntegrator<T, Alg> {
         }
     }
     /// Solve the ODE
-    pub fn solve(&mut self) {
+    pub fn integrate(&mut self) {
         while let Some(_i) = self.step() {}
     }
 }
 
 // Consuming iterator
 
-pub struct OdeIntegratorIterator<T: OdeFunction, Alg: OdeAlgorithm> {
-    pub integrator: OdeIntegrator<T, Alg>,
+pub struct OdeIntegratorIterator<'a, Params, Alg: OdeAlgorithm> {
+    pub integrator: OdeIntegrator<'a, Params, Alg>,
 }
 
-impl<T: OdeFunction, Alg: OdeAlgorithm> IntoIterator for OdeIntegrator<T, Alg> {
+impl<'a, Params, Alg: OdeAlgorithm> IntoIterator for OdeIntegrator<'a, Params, Alg> {
     type Item = (f64, Array1<f64>);
-    type IntoIter = OdeIntegratorIterator<T, Alg>;
+    type IntoIter = OdeIntegratorIterator<'a, Params, Alg>;
 
     fn into_iter(self) -> Self::IntoIter {
         OdeIntegratorIterator { integrator: self }
     }
 }
 
-impl<T: OdeFunction, Alg: OdeAlgorithm> Iterator for OdeIntegratorIterator<T, Alg> {
+impl<'a, Params, Alg: OdeAlgorithm> Iterator for OdeIntegratorIterator<'a, Params, Alg> {
     type Item = (f64, Array1<f64>);
 
     fn next(&mut self) -> Option<(f64, Array1<f64>)> {
@@ -105,20 +109,22 @@ impl<T: OdeFunction, Alg: OdeAlgorithm> Iterator for OdeIntegratorIterator<T, Al
     }
 }
 
-pub struct OdeIntegratorMutIterator<'a, T: OdeFunction, Alg: OdeAlgorithm> {
-    pub integrator: &'a mut OdeIntegrator<T, Alg>,
+// Non-consuming iterator
+
+pub struct OdeIntegratorMutIterator<'a, Params, Alg: OdeAlgorithm> {
+    pub integrator: &'a mut OdeIntegrator<'a, Params, Alg>,
 }
 
-impl<'a, T: OdeFunction, Alg: OdeAlgorithm> IntoIterator for &'a mut OdeIntegrator<T, Alg> {
+impl<'a, Params, Alg: OdeAlgorithm> IntoIterator for &'a mut OdeIntegrator<'a, Params, Alg> {
     type Item = (f64, Array1<f64>);
-    type IntoIter = OdeIntegratorMutIterator<'a, T, Alg>;
+    type IntoIter = OdeIntegratorMutIterator<'a, Params, Alg>;
 
     fn into_iter(self) -> Self::IntoIter {
         OdeIntegratorMutIterator { integrator: self }
     }
 }
 
-impl<'a, T: OdeFunction, Alg: OdeAlgorithm> Iterator for OdeIntegratorMutIterator<'a, T, Alg> {
+impl<'a, Params, Alg: OdeAlgorithm> Iterator for OdeIntegratorMutIterator<'a, Params, Alg> {
     type Item = (f64, Array1<f64>);
 
     fn next(&mut self) -> Option<(f64, Array1<f64>)> {
@@ -130,21 +136,22 @@ impl<'a, T: OdeFunction, Alg: OdeAlgorithm> Iterator for OdeIntegratorMutIterato
     }
 }
 
-// Non-consuming iterator
-
-/// Light-weight struct used to keep track of the state of the ODE throughout
-/// integration.
-pub struct OdeIntegratorBuilder<T: OdeFunction, Alg: OdeAlgorithm> {
+/// Struct for building an OdeIntegrator
+pub struct OdeIntegratorBuilder<'a, Params, Alg: OdeAlgorithm> {
     /// Function structure representing the RHS of the ODE.
-    pub func: T,
+    pub(crate) dudt: &'a dyn Fn(ArrayViewMut1<f64>, ArrayView1<f64>, f64, &Params),
+    /// Jacobian w.r.t. t of RHS of ODE
+    pub(crate) dfdt: Option<&'a dyn Fn(ArrayViewMut1<f64>, ArrayView1<f64>, f64, &Params)>,
+    /// Jacobian w.r.t. u of RHS of ODE
+    pub(crate) dfdu: Option<&'a dyn Fn(ArrayViewMut2<f64>, ArrayView1<f64>, f64, &Params)>,
+    /// Parameters of the ODE
+    pub params: Params,
     /// Current solution vector
     pub u: Array1<f64>,
     /// Current time
     pub t: f64,
     /// Current step size
     pub dt: f64,
-    /// Direction of integration.
-    pub tdir: f64,
     /// Final time value
     pub tfinal: f64,
     /// Options
@@ -153,95 +160,114 @@ pub struct OdeIntegratorBuilder<T: OdeFunction, Alg: OdeAlgorithm> {
     pub alg: Alg,
 }
 
-impl<T: OdeFunction, Alg: OdeAlgorithm> OdeIntegratorBuilder<T, Alg> {
-    pub fn default(prob: OdeProblem<T>, alg: Alg) -> OdeIntegratorBuilder<T, Alg> {
-        let mut opts = Alg::default_opts();
-        opts.dtmax = prob.tspan.1 - prob.tspan.0;
-
-        OdeIntegratorBuilder::<T, Alg> {
-            func: prob.func,
-            u: prob.uinit.clone(),
-            t: prob.tspan.0,
-            dt: opts.dtstart,
-            tdir: 1f64.copysign(prob.tspan.1 - prob.tspan.0),
-            tfinal: prob.tspan.1,
-            opts,
+impl<'a, Params, Alg: OdeAlgorithm> OdeIntegratorBuilder<'a, Params, Alg> {
+    pub fn default(
+        dudt: &'a dyn Fn(ArrayViewMut1<f64>, ArrayView1<f64>, f64, &Params),
+        uinit: Array1<f64>,
+        tspan: (f64, f64),
+        alg: Alg,
+        params: Params,
+    ) -> OdeIntegratorBuilder<'a, Params, Alg> {
+        OdeIntegratorBuilder {
+            dudt,
+            dfdt: None,
+            dfdu: None,
+            params,
+            u: uinit.clone(),
+            t: tspan.0,
+            dt: 1e-6,
+            tfinal: tspan.1,
+            opts: Alg::default_opts(),
             alg,
         }
     }
-    pub fn reltol(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn dfdu(
+        mut self,
+        jac: &'a dyn Fn(ArrayViewMut2<f64>, ArrayView1<f64>, f64, &Params),
+    ) -> Self {
+        self.dfdu = Some(jac);
+        self
+    }
+    pub fn dfdt(
+        mut self,
+        jac: &'a dyn Fn(ArrayViewMut1<f64>, ArrayView1<f64>, f64, &Params),
+    ) -> Self {
+        self.dfdt = Some(jac);
+        self
+    }
+    pub fn reltol(mut self, val: f64) -> Self {
         self.opts.reltol = val;
         self
     }
-    pub fn abstol(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn abstol(mut self, val: f64) -> Self {
         self.opts.abstol = val;
         self
     }
-    pub fn dense(mut self, val: bool) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn dense(mut self, val: bool) -> Self {
         self.opts.dense = val;
         self
     }
-    pub fn dtstart(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn dtstart(mut self, val: f64) -> Self {
         self.opts.dtstart = val;
         self
     }
-    pub fn dtmax(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn dtmax(mut self, val: f64) -> Self {
         self.opts.dtmax = val;
         self
     }
-    pub fn max_steps(mut self, val: usize) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn max_steps(mut self, val: usize) -> Self {
         self.opts.max_steps = val;
         self
     }
-    pub fn max_newt_iter(mut self, val: usize) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn max_newt_iter(mut self, val: usize) -> Self {
         self.opts.max_newt_iter = val;
         self
     }
-    pub fn max_stiff(mut self, val: usize) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn max_stiff(mut self, val: usize) -> Self {
         self.opts.max_stiff = val;
         self
     }
-    pub fn modern_pred(mut self, val: bool) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn modern_pred(mut self, val: bool) -> Self {
         self.opts.modern_pred = val;
         self
     }
-    pub fn safe(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn safe(mut self, val: f64) -> Self {
         self.opts.safe = val;
         self
     }
-    pub fn facr(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn facr(mut self, val: f64) -> Self {
         self.opts.facr = val;
         self
     }
-    pub fn facl(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn facl(mut self, val: f64) -> Self {
         self.opts.facl = val;
         self
     }
-    pub fn quot1(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn quot1(mut self, val: f64) -> Self {
         self.opts.quot1 = val;
         self
     }
-    pub fn quot2(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn quot2(mut self, val: f64) -> Self {
         self.opts.quot2 = val;
         self
     }
-    pub fn beta(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn beta(mut self, val: f64) -> Self {
         self.opts.beta = val;
         self
     }
-    pub fn fnewt(mut self, val: f64) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn fnewt(mut self, val: f64) -> Self {
         self.opts.fnewt = val;
         self
     }
-    pub fn use_ext_col(mut self, val: bool) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn use_ext_col(mut self, val: bool) -> Self {
         self.opts.use_ext_col = val;
         self
     }
-    pub fn hess(mut self, val: bool) -> OdeIntegratorBuilder<T, Alg> {
+    pub fn hess(mut self, val: bool) -> Self {
         self.opts.hess = val;
         self
     }
-    pub fn build(mut self) -> OdeIntegrator<T, Alg> {
+    pub fn build(mut self) -> OdeIntegrator<'a, Params, Alg> {
         let cache = Alg::new_cache(&mut self);
 
         let mut sol = OdeSolution::new();
@@ -249,17 +275,21 @@ impl<T: OdeFunction, Alg: OdeAlgorithm> OdeIntegratorBuilder<T, Alg> {
         sol.us.push(self.u.clone());
 
         OdeIntegrator {
-            func: self.func,
+            dudt: self.dudt,
+            dfdt: self.dfdt,
+            dfdu: self.dfdu,
+            params: self.params,
             u: self.u.clone(),
             t: self.t,
             dt: self.dt,
             uprev: self.u,
             tprev: self.t,
             dtprev: self.dt,
-            tdir: self.tdir,
+            tdir: 1f64.copysign(self.tfinal - self.t),
             tfinal: self.tfinal,
             opts: self.opts,
             stats: OdeStatistics::new(),
+            alg: self.alg,
             sol,
             cache,
         }

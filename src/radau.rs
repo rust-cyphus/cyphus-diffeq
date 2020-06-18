@@ -24,26 +24,29 @@ mod test {
         };
         let uinit = array![2.0, -0.66];
         let tspan = (0.0, 2.0);
-        impl OdeFunction for VanDerPol {
-            fn dudt(&mut self, mut du: ArrayViewMut1<f64>, u: ArrayView1<f64>, _t: f64) {
-                du[0] = u[1];
-                du[1] = ((1.0 - u[0] * u[0]) * u[1] - u[0]) / self.mu;
-            }
-            fn dfdu(&mut self, mut df: ArrayViewMut2<f64>, u: ArrayView1<f64>, _t: f64) {
-                df[[0, 0]] = 0.0;
-                df[[0, 1]] = 1.0;
-                df[[1, 0]] = -(2.0 * u[0] * u[1] + 1.0) / self.mu;
-                df[[1, 1]] = (1.0 - u[0] * u[0]) / self.mu;
-            }
-        }
-        let func = VanDerPol { mu: 1e-6 };
-        let prob = OdeProblem::new(func, uinit.clone(), tspan);
-        let mut integrator = OdeIntegratorBuilder::default(prob, Radau5)
+        let dudt = |mut du: ArrayViewMut1<f64>, u: ArrayView1<f64>, _t: f64, p: &VanDerPol| {
+            du[0] = u[1];
+            du[1] = ((1.0 - u[0] * u[0]) * u[1] - u[0]) / p.mu;
+        };
+        let dfdu = |mut df: ArrayViewMut2<f64>, u: ArrayView1<f64>, _t: f64, p: &VanDerPol| {
+            df[[0, 0]] = 0.0;
+            df[[0, 1]] = 1.0;
+            df[[1, 0]] = -(2.0 * u[0] * u[1] + 1.0) / p.mu;
+            df[[1, 1]] = (1.0 - u[0] * u[0]) / p.mu;
+        };
+        let p = VanDerPol { mu: 1e-6 };
+        //let prob = OdeProblem::new(func, uinit.clone(), tspan);
+        let mut integrator = OdeIntegratorBuilder::default(&dudt, uinit, tspan, Radau5, p)
+            .dfdu(&dfdu)
             .reltol(1e-7)
             .abstol(1e-7)
             .build();
 
-        for (t, u) in (&mut integrator).into_iter() {
+        //for (t, u) in (&mut integrator).into_iter() {
+        //    println!("{}, {}", t, u);
+        //}
+        integrator.integrate();
+        for (t, u) in integrator.sol.ts.iter().zip(integrator.sol.us.iter()) {
             println!("{}, {}", t, u);
         }
         println!("{:?}", integrator.sol.retcode);

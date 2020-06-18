@@ -1,10 +1,10 @@
 use super::Radau5;
 use crate::linalg::sol::*;
-use crate::ode::{OdeFunction, OdeIntegrator};
+use crate::ode::OdeIntegrator;
 
 impl Radau5 {
     /// Compute the error estimate for the Radau5 algorithm.
-    pub(crate) fn error_estimate<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Radau5>) {
+    pub(crate) fn error_estimate<Params>(integrator: &mut OdeIntegrator<Params, Radau5>) {
         integrator.cache.err = 0.0;
 
         let n = integrator.cache.e1.nrows();
@@ -39,10 +39,11 @@ impl Radau5 {
             for i in 0..n {
                 integrator.cache.cont[i] = integrator.u[i] + integrator.cache.cont[i];
             }
-            integrator.func.dudt(
+            (integrator.dudt)(
                 integrator.cache.f1.view_mut(),
                 integrator.cache.cont.view(),
                 integrator.t,
+                &integrator.params,
             );
             integrator.stats.function_evals += 1;
             for i in 0..n {

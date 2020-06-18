@@ -1,17 +1,15 @@
 pub mod algorithm;
 pub mod code;
-pub mod function;
 pub mod integrator;
+pub mod jacobian;
 pub mod options;
-pub mod problem;
 pub mod solution;
 pub mod statistics;
 
 pub use algorithm::*;
 pub use code::*;
-pub use function::*;
 pub use integrator::*;
+pub(crate) use jacobian::*;
 pub use options::*;
-pub use problem::*;
 pub use solution::*;
 pub use statistics::*;

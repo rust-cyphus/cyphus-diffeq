@@ -6,7 +6,7 @@ use ndarray::prelude::*;
 impl Radau5 {
     /// Perform a decomposition on the real matrices used for solving ODE using
     /// Radau5
-    pub(crate) fn decomp_real<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>) -> usize {
+    pub(crate) fn decomp_real<Params>(integrator: &mut OdeIntegrator<Params, Self>) -> usize {
         // E1 = fac1 * I - dfdu
         integrator.cache.e1.assign(
             &(integrator.cache.fac1 * Array::eye(integrator.cache.e1.shape()[0])
@@ -22,7 +22,7 @@ impl Radau5 {
 
     /// Perform a decomposition on the complex matrices used for solving ODE using
     /// Radau5
-    pub(crate) fn decomp_complex<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>) -> usize {
+    pub(crate) fn decomp_complex<Params>(integrator: &mut OdeIntegrator<Params, Self>) -> usize {
         let n = integrator.cache.e2r.nrows();
         let iden = Array::eye(n);
 
@@ -45,8 +45,8 @@ impl Radau5 {
     }
     /// Perform the needed decompositions for the Radau5 algorithm. Returns
     /// true if the decompositions were successful. False otherwise.
-    pub(super) fn perform_decompositions<T: OdeFunction>(
-        integrator: &mut OdeIntegrator<T, Self>,
+    pub(super) fn perform_decompositions<Params>(
+        integrator: &mut OdeIntegrator<Params, Self>,
     ) -> bool {
         // compute the matrices e1 and e2 and their decompositions
         integrator.cache.fac1 = Radau5::U1 / integrator.dt;
@@ -70,10 +70,13 @@ impl Radau5 {
         integrator.cache.reject = true;
         integrator.cache.last = false;
         if !integrator.cache.caljac {
-            integrator.func.dfdu(
+            jacobian_u(
+                integrator.dudt,
+                integrator.dfdu,
                 integrator.cache.dfdu.view_mut(),
                 integrator.u.view(),
                 integrator.t,
+                &integrator.params,
             );
         }
         return false;

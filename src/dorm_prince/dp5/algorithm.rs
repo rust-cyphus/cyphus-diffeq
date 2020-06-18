@@ -17,13 +17,16 @@ impl OdeAlgorithm for DormandPrince5 {
         opts.max_steps = 100000;
         opts
     }
-    fn new_cache<T: OdeFunction>(integrator: &mut OdeIntegratorBuilder<T, Self>) -> Self::Cache {
+    fn new_cache<Params>(integrator: &mut OdeIntegratorBuilder<Params, Self>) -> Self::Cache {
         let n = integrator.u.len();
         let mut du = Array1::<f64>::zeros(n);
 
-        integrator
-            .func
-            .dudt(du.view_mut(), integrator.u.view(), integrator.t);
+        (integrator.dudt)(
+            du.view_mut(),
+            integrator.u.view(),
+            integrator.t,
+            &integrator.params,
+        );
 
         DormandPrince5Cache {
             n_stiff: 0,
@@ -51,7 +54,7 @@ impl OdeAlgorithm for DormandPrince5 {
     }
     /// Step the integrator using the DormandPrince5 algorithm.
     #[allow(dead_code)]
-    fn step<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>)
+    fn step<Params>(integrator: &mut OdeIntegrator<Params, Self>)
     where
         Self: Sized,
     {

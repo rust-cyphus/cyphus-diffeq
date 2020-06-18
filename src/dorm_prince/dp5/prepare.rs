@@ -1,12 +1,12 @@
 use super::DormandPrince5;
-use crate::ode::{OdeFunction, OdeIntegrator};
+use crate::ode::OdeIntegrator;
 
 impl DormandPrince5 {
     /// Prepare the integrator and integrator.cache for the next DormandPrince5 step.
     #[allow(dead_code)]
-    pub(super) fn prepare_next_step<T: OdeFunction>(
+    pub(super) fn prepare_next_step<Params>(
         t_err: f64,
-        integrator: &mut OdeIntegrator<T, DormandPrince5>,
+        integrator: &mut OdeIntegrator<Params, DormandPrince5>,
     ) {
         let beta = integrator.opts.beta;
         let expo1 = 0.2 - beta.powf(0.75);

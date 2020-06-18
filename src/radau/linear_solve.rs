@@ -1,10 +1,10 @@
 use super::Radau5;
 use crate::linalg::sol::*;
-use crate::ode::{OdeFunction, OdeIntegrator};
+use crate::ode::OdeIntegrator;
 
 impl Radau5 {
     /// Solve the linear systems for the Radau5 algorithm
-    pub(crate) fn linear_solve<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>) {
+    pub(crate) fn linear_solve<Params>(integrator: &mut OdeIntegrator<Params, Self>) {
         let n = integrator.cache.e1.nrows();
         for i in 0..n {
             let s2 = -integrator.cache.f2[i];

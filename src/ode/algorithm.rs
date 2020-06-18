@@ -5,7 +5,6 @@
 //!   needed for integration of the ODE (`gen_cache`),
 //! - and advance the integrator to the next state (`next`).
 
-use super::function::OdeFunction;
 use super::integrator::{OdeIntegrator, OdeIntegratorBuilder};
 use super::options::OdeIntegratorOpts;
 
@@ -15,11 +14,11 @@ pub trait OdeAlgorithm {
     /// Return a options struct with the default options for the algorithm.
     fn default_opts() -> OdeIntegratorOpts;
     /// Return an initialized cache
-    fn new_cache<T: OdeFunction>(integrator: &mut OdeIntegratorBuilder<T, Self>) -> Self::Cache
+    fn new_cache<Params>(integrator: &mut OdeIntegratorBuilder<Params, Self>) -> Self::Cache
     where
         Self: Sized;
     /// Advance the integrator to the next state.
-    fn step<T: OdeFunction>(integrator: &mut OdeIntegrator<T, Self>)
+    fn step<Params>(integrator: &mut OdeIntegrator<Params, Self>)
     where
         Self: Sized;
 }
