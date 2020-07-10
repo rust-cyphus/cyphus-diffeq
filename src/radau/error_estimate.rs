@@ -1,6 +1,7 @@
 use super::Radau5;
 use crate::linalg::sol::*;
 use crate::ode::OdeIntegrator;
+use ndarray::prelude::*;
 
 impl Radau5 {
     /// Compute the error estimate for the Radau5 algorithm.
@@ -41,7 +42,7 @@ impl Radau5 {
             }
             (integrator.dudt)(
                 integrator.cache.f1.view_mut(),
-                integrator.cache.cont.view(),
+                integrator.cache.cont.slice(s![..n]),
                 integrator.t,
                 &integrator.params,
             );

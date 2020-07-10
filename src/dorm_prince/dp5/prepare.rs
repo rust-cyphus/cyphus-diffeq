@@ -62,6 +62,7 @@ impl DormandPrince5 {
             }
 
             integrator.cache.du.assign(&integrator.cache.dunew);
+            integrator.uprev.assign(&integrator.u);
             integrator.u.assign(&integrator.cache.unew);
             integrator.tprev = integrator.t;
             integrator.t += integrator.dt;

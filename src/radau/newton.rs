@@ -1,5 +1,6 @@
 use super::Radau5;
 use crate::ode::*;
+use ndarray::prelude::*;
 
 impl Radau5 {
     pub(super) fn prepare_newton<Params>(integrator: &mut OdeIntegrator<Params, Self>) {
@@ -85,7 +86,7 @@ impl Radau5 {
             }
             (integrator.dudt)(
                 integrator.cache.z1.view_mut(),
-                integrator.cache.cont.view(),
+                integrator.cache.cont.slice(s![..n]),
                 integrator.t + Radau5::C1 * integrator.dt,
                 &integrator.params,
             );
@@ -95,7 +96,7 @@ impl Radau5 {
             }
             (integrator.dudt)(
                 integrator.cache.z2.view_mut(),
-                integrator.cache.cont.view(),
+                integrator.cache.cont.slice(s![..n]),
                 integrator.t + Radau5::C2 * integrator.dt,
                 &integrator.params,
             );
@@ -105,7 +106,7 @@ impl Radau5 {
             }
             (integrator.dudt)(
                 integrator.cache.z3.view_mut(),
-                integrator.cache.cont.view(),
+                integrator.cache.cont.slice(s![..n]),
                 integrator.t + integrator.dt,
                 &integrator.params,
             );

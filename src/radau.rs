@@ -35,18 +35,14 @@ mod test {
             df[[1, 1]] = (1.0 - u[0] * u[0]) / p.mu;
         };
         let p = VanDerPol { mu: 1e-6 };
-        //let prob = OdeProblem::new(func, uinit.clone(), tspan);
         let mut integrator = OdeIntegratorBuilder::default(&dudt, uinit, tspan, Radau5, p)
             .dfdu(&dfdu)
             .reltol(1e-7)
             .abstol(1e-7)
             .build();
 
-        //for (t, u) in (&mut integrator).into_iter() {
-        //    println!("{}, {}", t, u);
-        //}
         integrator.integrate();
-        for (t, u) in integrator.sol.ts.iter().zip(integrator.sol.us.iter()) {
+        for (t, u) in (&mut integrator.sol).into_iter() {
             println!("{}, {}", t, u);
         }
         println!("{:?}", integrator.sol.retcode);

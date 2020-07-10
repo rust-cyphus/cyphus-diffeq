@@ -60,80 +60,12 @@ pub struct OdeIntegrator<'a, Params: 'a, Alg: OdeAlgorithm + 'a> {
     pub stats: OdeStatistics,
     /// Solution object
     pub sol: OdeSolution,
+    /// The algorithm being used to solve the ODE.
     pub alg: Alg,
+    /// Callback function to mutate state of integrator after each step.
+    pub callback: Option<&'a dyn Fn(&mut Self)>,
     /// Cache associated with the algorithm
     pub(crate) cache: Alg::Cache,
-}
-
-impl<'a, Params, Alg: OdeAlgorithm> OdeIntegrator<'a, Params, Alg> {
-    /// Step the ODE to the next state. Returns solution if finished and
-    /// None otherwise.
-    pub fn step(&mut self) -> Option<usize> {
-        Alg::step(self);
-        if self.sol.retcode == super::code::OdeRetCode::Continue {
-            Some(self.stats.steps)
-        } else {
-            None
-        }
-    }
-    /// Solve the ODE
-    pub fn integrate(&mut self) {
-        while let Some(_i) = self.step() {}
-    }
-}
-
-// Consuming iterator
-
-pub struct OdeIntegratorIterator<'a, Params, Alg: OdeAlgorithm> {
-    pub integrator: OdeIntegrator<'a, Params, Alg>,
-}
-
-impl<'a, Params, Alg: OdeAlgorithm> IntoIterator for OdeIntegrator<'a, Params, Alg> {
-    type Item = (f64, Array1<f64>);
-    type IntoIter = OdeIntegratorIterator<'a, Params, Alg>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        OdeIntegratorIterator { integrator: self }
-    }
-}
-
-impl<'a, Params, Alg: OdeAlgorithm> Iterator for OdeIntegratorIterator<'a, Params, Alg> {
-    type Item = (f64, Array1<f64>);
-
-    fn next(&mut self) -> Option<(f64, Array1<f64>)> {
-        let res = self.integrator.step();
-        match res {
-            Some(_i) => Some((self.integrator.t, self.integrator.u.clone())),
-            None => None,
-        }
-    }
-}
-
-// Non-consuming iterator
-
-pub struct OdeIntegratorMutIterator<'a, Params, Alg: OdeAlgorithm> {
-    pub integrator: &'a mut OdeIntegrator<'a, Params, Alg>,
-}
-
-impl<'a, Params, Alg: OdeAlgorithm> IntoIterator for &'a mut OdeIntegrator<'a, Params, Alg> {
-    type Item = (f64, Array1<f64>);
-    type IntoIter = OdeIntegratorMutIterator<'a, Params, Alg>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        OdeIntegratorMutIterator { integrator: self }
-    }
-}
-
-impl<'a, Params, Alg: OdeAlgorithm> Iterator for OdeIntegratorMutIterator<'a, Params, Alg> {
-    type Item = (f64, Array1<f64>);
-
-    fn next(&mut self) -> Option<(f64, Array1<f64>)> {
-        let res = (*self).integrator.step();
-        match res {
-            Some(_i) => Some((self.integrator.t, self.integrator.u.clone())),
-            None => None,
-        }
-    }
 }
 
 /// Struct for building an OdeIntegrator
@@ -158,6 +90,8 @@ pub struct OdeIntegratorBuilder<'a, Params, Alg: OdeAlgorithm> {
     pub opts: OdeIntegratorOpts,
     /// Algorithm
     pub alg: Alg,
+    /// Callback function to mutate state of integrator after each step.
+    pub callback: Option<&'a dyn Fn(&mut OdeIntegrator<'a, Params, Alg>)>,
 }
 
 impl<'a, Params, Alg: OdeAlgorithm> OdeIntegratorBuilder<'a, Params, Alg> {
@@ -179,6 +113,7 @@ impl<'a, Params, Alg: OdeAlgorithm> OdeIntegratorBuilder<'a, Params, Alg> {
             tfinal: tspan.1,
             opts: Alg::default_opts(),
             alg,
+            callback: None,
         }
     }
     pub fn dfdu(
@@ -267,6 +202,10 @@ impl<'a, Params, Alg: OdeAlgorithm> OdeIntegratorBuilder<'a, Params, Alg> {
         self.opts.hess = val;
         self
     }
+    pub fn callback(mut self, cb: &'a dyn Fn(&mut OdeIntegrator<'a, Params, Alg>)) -> Self {
+        self.callback = Some(cb);
+        self
+    }
     pub fn build(mut self) -> OdeIntegrator<'a, Params, Alg> {
         let cache = Alg::new_cache(&mut self);
 
@@ -290,8 +229,132 @@ impl<'a, Params, Alg: OdeAlgorithm> OdeIntegratorBuilder<'a, Params, Alg> {
             opts: self.opts,
             stats: OdeStatistics::new(),
             alg: self.alg,
+            callback: self.callback,
             sol,
             cache,
+        }
+    }
+}
+
+impl<'a, Params, Alg: OdeAlgorithm> OdeIntegrator<'a, Params, Alg> {
+    /// Step the ODE to the next state. Returns solution if finished and
+    /// None otherwise.
+    pub fn step(&mut self) -> Option<usize> {
+        Alg::step(self);
+        match self.callback {
+            Some(f) => f(self),
+            None => {}
+        }
+        if self.sol.retcode == super::code::OdeRetCode::Continue {
+            Some(self.stats.steps)
+        } else {
+            None
+        }
+    }
+    /// Solve the ODE
+    pub fn integrate(&mut self) {
+        while let Some(_i) = self.step() {}
+    }
+}
+
+/// Consuming iterator for OdeIntegrator.
+///
+/// # Examples
+/// ```
+/// struct HO(w: f64);
+/// let dudt = |mut du: ArrayViewMut1<f64>, u: ArrayView1<f64>, t: f64, p: &HO|{
+///     du[0] = u[1];
+///     du[1] = -p.w * u[0];
+/// }
+/// let uinit = array![0.0, 1.0];
+/// let tspan = (0.0, 1.0);
+/// let integrator = OdeIntegratorBuilder::default(
+///     &dudt,
+///     uinit,
+///     tspan,
+///     DormandPrince5,
+///     HO{w:1.0}
+/// ).reltol(1e-7)
+///     .abstol(1e-7)
+///     .build();
+/// // Iterate
+/// for (t, u) in integrator.into_iter() {
+///     assert!((u[0] - t.sin()).abs() < 1e-6);
+///     assert!((u[1] - t.cos()).abs() < 1e-6);
+/// }
+/// ```
+pub struct OdeIntegratorIterator<'a, Params, Alg: OdeAlgorithm> {
+    pub integrator: OdeIntegrator<'a, Params, Alg>,
+}
+
+impl<'a, Params, Alg: OdeAlgorithm> IntoIterator for OdeIntegrator<'a, Params, Alg> {
+    type Item = (f64, Array1<f64>);
+    type IntoIter = OdeIntegratorIterator<'a, Params, Alg>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        OdeIntegratorIterator { integrator: self }
+    }
+}
+
+impl<'a, Params, Alg: OdeAlgorithm> Iterator for OdeIntegratorIterator<'a, Params, Alg> {
+    type Item = (f64, Array1<f64>);
+
+    fn next(&mut self) -> Option<(f64, Array1<f64>)> {
+        let res = self.integrator.step();
+        match res {
+            Some(_i) => Some((self.integrator.t, self.integrator.u.clone())),
+            None => None,
+        }
+    }
+}
+
+/// Non-consuming, mutable iterator for OdeIntegrator.
+///
+/// # Examples
+/// ```
+/// struct HO(w: f64);
+/// let dudt = |mut du: ArrayViewMut1<f64>, u: ArrayView1<f64>, t: f64, p: &HO|{
+///     du[0] = u[1];
+///     du[1] = -p.w * u[0];
+/// }
+/// let uinit = array![0.0, 1.0];
+/// let tspan = (0.0, 1.0);
+/// let mut integrator = OdeIntegratorBuilder::default(
+///     &dudt,
+///     uinit,
+///     tspan,
+///     DormandPrince5,
+///     HO{w:1.0}
+/// ).reltol(1e-7)
+///     .abstol(1e-7)
+///     .build();
+/// // Iterate
+/// for (t, u) in (&mut integrator).into_iter() {
+///     assert!((u[0] - t.sin()).abs() < 1e-6);
+///     assert!((u[1] - t.cos()).abs() < 1e-6);
+/// }
+/// ```
+pub struct OdeIntegratorMutIterator<'a, Params, Alg: OdeAlgorithm> {
+    pub integrator: &'a mut OdeIntegrator<'a, Params, Alg>,
+}
+
+impl<'a, Params, Alg: OdeAlgorithm> IntoIterator for &'a mut OdeIntegrator<'a, Params, Alg> {
+    type Item = (f64, Array1<f64>);
+    type IntoIter = OdeIntegratorMutIterator<'a, Params, Alg>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        OdeIntegratorMutIterator { integrator: self }
+    }
+}
+
+impl<'a, Params, Alg: OdeAlgorithm> Iterator for OdeIntegratorMutIterator<'a, Params, Alg> {
+    type Item = (f64, Array1<f64>);
+
+    fn next(&mut self) -> Option<(f64, Array1<f64>)> {
+        let res = (*self).integrator.step();
+        match res {
+            Some(_i) => Some((self.integrator.t, self.integrator.u.clone())),
+            None => None,
         }
     }
 }
